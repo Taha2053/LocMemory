@@ -1,0 +1,46 @@
+localmem/
+│
+├── core/                  ← All main logic
+│   ├── __init__.py
+│   ├── memory.py          ← Core store: add(), search(), load_all(). SQLite + .md mirror
+│   ├── context.py         ← Packs retrieved memories into the LLM prompt (token-aware)
+│   ├── llm.py             ← LLM caller: Ollama / HuggingFace / API backends, model-agnostic
+│   └── chat.py            ← Main entry point: terminal loop + launches dashboard server
+│
+├── retrieval/             ← Month 2: upgraded retrieval strategies (drop-in replacements)
+│   ├── __init__.py
+│   ├── hybrid.py          ← Cosine + recency decay + category filter combined scorer
+│   ├── ripgrep.py         ← Regex-based search via ripgrep for fast keyword matching
+│   └── metrics.py         ← precision@K, latency logger, benchmark vs baseline
+│
+├── rl/                    ← Month 3: RL agent for smart memory selection
+│   ├── __init__.py
+│   ├── env.py             ← Gym-style environment: state = candidates, action = subset pick
+│   ├── agent.py           ← PPO agent: learns which memory combo leads to best answers
+│   └── reward.py          ← Reward function: response quality signal (LLM-graded or heuristic)
+│
+├── security/              ← Month 4: privacy wrapper around memory.py
+│   ├── __init__.py
+│   ├── detector.py        ← PII detection: regex patterns + optional classifier
+│   └── crypto.py          ← AES encryption/decryption for sensitive memories
+│
+├── dashboard/             ← Locally hosted web UI (React, runs on localhost)
+│   ├── App.jsx            ← Root component, routing
+│   ├── MemoryList.jsx     ← Lists stored memories with scores + categories
+│   ├── MemoryGraph.jsx    ← Month 2+: Obsidian-style graph of memory relationships
+│   ├── MetricsPanel.jsx   ← Retrieval stats: precision@K, latency, hit rates
+│   └── LogViewer.jsx      ← Session logs viewer with timestamps
+│
+├── memories/              ← Auto-generated .md mirror of every stored memory
+│   └── 20250218T142301_a3f9bc12.md
+│
+├── tests/
+│   ├── test_memory.py     ← Unit tests: add, search, delete, edge cases
+│   ├── test_context.py    ← Tests prompt packing stays within token budget
+│   ├── test_retrieval.py  ← Hybrid scorer correctness + regression vs baseline
+│   └── test_e2e.py        ← Full pipeline: user message → memory → LLM → response
+│
+├── .env                   ← LOCALMEM_DB_PATH, LOCALMEM_MD_DIR, LOCALMEM_LLM_MODEL
+├── requirements.txt
+├── localmem.db            ← SQLite database (auto-created, gitignored)
+└── README.md
