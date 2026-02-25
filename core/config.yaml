@@ -1,1 +1,3 @@
-SAVE_DIRECTORY: "/mnt/Data/Taha/Desktop/LocMemory-Testing/"
+SAVE_DIRECTORY: "~/Desktop/LocMemory-Testing/"
+MEMORIES_DIRECTORY: "memories/"
+DB_PATH: "data/"

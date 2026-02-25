@@ -3,4 +3,10 @@
 .vscode
 __pycache__/
 
+# Ignore the folders
 Rebuilding-stuff-to-learn-from/
+testing/
+
+# Ignore the files
+*.md
+*.db

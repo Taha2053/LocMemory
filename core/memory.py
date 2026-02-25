@@ -1,115 +1,145 @@
-import os
-import yaml
-from pathlib import Path
-from typing import Optional, Dict, Any
+import sqlite3
+import hashlib
 import json
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 
-class FileReader:
-    """Optimized file reader for Markdown files."""
+# ─────────────────────────────────────────────
+# 1.  Memory dataclass
+# ─────────────────────────────────────────────
 
-    def __init__(self, config_path: str = "config.yaml"):
-        """Initialize FileReader with config path."""
-        # Resolve config path relative to this script's directory
-        if not Path(config_path).is_absolute():
-            config_path = Path(__file__).parent / config_path
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
-        self.target_dir = Path(self.config.get("SAVE_DIRECTORY", ""))
+@dataclass
+class Memory:
+    id: str                        # SHA-256 of text (deterministic & unique)
+    text: str                      # Raw text content
+    timestamp: str                 # ISO-8601 string
+    category: str                  # e.g. "fact", "event", "todo" …
+    embedding: list[float]         # Dense vector from embedding model
 
-    def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from YAML file."""
+
+# ─────────────────────────────────────────────
+# 2.  MemoryStore
+# ─────────────────────────────────────────────
+
+class MemoryStore:
+
+    def __init__(
+        self,
+        db_path: str = "data/memories.db",
+        md_dir: str = "memories",
+        model_name: str = "all-MiniLM-L6-v2",   # used when real model is available
+    ):
+        # ── Embedding model ──────────────────────────────────────────────
+        self.model = self._load_embedding_model(model_name)
+
+        # ── SQLite ───────────────────────────────────────────────────────
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._create_table()
+
+        # ── Markdown output directory ─────────────────────────────────────
+        self.md_dir = Path(md_dir)
+        self.md_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"MemoryStore ready — db: '{db_path}'  |  md dir: '{md_dir}/'")
+
+    # ── private helpers ───────────────────────────────────────────────────
+
+    def _load_embedding_model(self, model_name: str):
+        """
+        Try to load a real sentence-transformer.
+        Falls back to a hash-based mock so the rest of the system still works.
+        Swap this out once you have `pip install sentence-transformers`.
+        """
         try:
-            with open(self.config_path, "r") as file:
-                return yaml.safe_load(file) or {}
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
-        except yaml.YAMLError as e:
-            raise ValueError(f"Error parsing YAML config: {e}")
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer(model_name)
+            print(f"Loaded embedding model: {model_name}")
+            return model
+        except ImportError:
+            print("sentence-transformers not installed — using mock embedder.")
+            return None
 
-    def list_files(self) -> list[Path]:
-        """List all .md files in the target directory."""
-        if not self.target_dir.exists():
-            raise FileNotFoundError(f"Directory not found: {self.target_dir}")
+    def _embed(self, text: str) -> list[float]:
+        """Return a 384-dim embedding vector (or mock if no model)."""
+        if self.model is not None:
+            return self.model.encode(text).tolist()
 
-        if not self.target_dir.is_dir():
-            raise NotADirectoryError(f"Path is not a directory: {self.target_dir}")
+        # ── Mock: deterministic 384-dim float vector from SHA-256 ─────────
+        digest = hashlib.sha256(text.encode()).digest()          # 32 bytes
+        # Tile the digest bytes to reach 384 values, normalise to [-1, 1]
+        tiled = (digest * 12)[:384]                              # 384 bytes
+        return [(b - 127.5) / 127.5 for b in tiled]
 
-        # Get all .md files sorted by name
-        files = sorted(
-            [
-                f
-                for f in self.target_dir.iterdir()
-                if f.is_file() and f.suffix.lower() == ".md"
-            ]
+    def _create_table(self):
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id        TEXT PRIMARY KEY,
+                text      TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                category  TEXT NOT NULL DEFAULT 'general',
+                embedding TEXT NOT NULL          -- stored as JSON array
+            )
+        """)
+        self.conn.commit()
+
+    # ── public API ────────────────────────────────────────────────────────
+
+    def add(self, text: str, category: str = "general") -> Memory:
+        """
+        Embed text → save to SQLite → write .md file.
+        Returns the stored Memory object.
+        """
+        # Build Memory object
+        mem = Memory(
+            id        = hashlib.sha256(text.encode()).hexdigest()[:16],
+            text      = text,
+            timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            category  = category,
+            embedding = self._embed(text),
         )
-        return files
 
-    def display_files(self) -> Optional[Path]:
-        """Display files and get user selection."""
-        files = self.list_files()
+        # ── SQLite insert (ignore duplicates) ─────────────────────────────
+        self.conn.execute(
+            """
+            INSERT OR IGNORE INTO memories (id, text, timestamp, category, embedding)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (mem.id, mem.text, mem.timestamp, mem.category,
+             json.dumps(mem.embedding)),
+        )
+        self.conn.commit()
 
-        if not files:
-            print(f"No files found in {self.target_dir}")
-            return None
+        # ── Markdown file ─────────────────────────────────────────────────
+        md_path = self.md_dir / f"{mem.id}.md"
+        md_path.write_text(
+            f"---\n"
+            f"id: {mem.id}\n"
+            f"timestamp: {mem.timestamp}\n"
+            f"category: {mem.category}\n"
+            f"---\n\n"
+            f"# Memory\n\n"
+            f"{mem.text}\n"
+        )
 
-        print(f"\nMarkdown files in {self.target_dir}:\n")
-        for idx, file in enumerate(files, 1):
-            file_size = file.stat().st_size
-            print(f"  {idx}. {file.name} ({file_size} bytes)")
+        print(f"Saved  [{mem.category}]  id={mem.id}  →  {md_path.name}")
+        return mem
 
-        while True:
-            try:
-                choice = input(f"\nSelect file (1-{len(files)}): ").strip()
-                idx = int(choice) - 1
+    def count(self) -> int:
+        """Return total number of rows in the DB."""
+        row = self.conn.execute("SELECT COUNT(*) FROM memories").fetchone()
+        return row[0]
 
-                if 0 <= idx < len(files):
-                    return files[idx]
-                else:
-                    print(
-                        f"Invalid selection. Please choose between 1 and {len(files)}"
-                    )
-            except ValueError:
-                print("Invalid input. Please enter a number.")
-
-    def read_file(self, file_path: Path) -> str:
-        """Read file content with error handling."""
-        try:
-            with open(file_path, "r", encoding="utf-8") as file:
-                return file.read()
-        except UnicodeDecodeError:
-            # Fallback to binary read if text read fails
-            with open(file_path, "rb") as file:
-                return file.read().decode("utf-8", errors="replace")
-
-    def parse_data(self, content: str) -> str:
-        """Return markdown content as-is."""
-        return content
-
-    def run(self) -> Optional[Any]:
-        """Main execution flow: list files, select, read, and parse."""
-        print(f"Reading from directory: {self.target_dir}\n")
-
-        selected_file = self.display_files()
-        if not selected_file:
-            return None
-
-        print(f"\nReading {selected_file.name}...\n")
-
-        try:
-            content = self.read_file(selected_file)
-            data = self.parse_data(content)
-            return data
-        except Exception as e:
-            print(f"Error reading file: {e}")
-            return None
-
-
-# Main execution
-if __name__ == "__main__":
-    reader = FileReader(config_path="config.yaml")
-    data = reader.run()
-
-    if data:
-        print("\nData retrieved successfully!\n")
-        print(data)
+    def all(self) -> list[Memory]:
+        """Fetch every stored memory (without re-loading embeddings into vector)."""
+        rows = self.conn.execute(
+            "SELECT id, text, timestamp, category, embedding FROM memories"
+        ).fetchall()
+        return [
+            Memory(id=r[0], text=r[1], timestamp=r[2],
+                   category=r[3], embedding=json.loads(r[4]))
+            for r in rows
+        ]
