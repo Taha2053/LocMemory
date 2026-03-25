@@ -1,11 +1,11 @@
 import sqlite3
 import hashlib
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import math
-
 
 # ─────────────────────────────────────────────
 # 1.  Memory dataclass
@@ -98,7 +98,7 @@ class MemoryStore:
         """
         # Build Memory object
         mem = Memory(
-            id=hashlib.sha256(text.encode()).hexdigest()[:16],
+            id=str(uuid.uuid4()),
             text=text,
             timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
             category=category,

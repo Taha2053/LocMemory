@@ -6,6 +6,7 @@ __pycache__/
 # Ignore the folders
 Rebuilding-stuff-to-learn-from/
 testing/
+docs/
 
 # Ignore the files
 *.md
