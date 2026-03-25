@@ -2,14 +2,100 @@ import sqlite3
 import hashlib
 import json
 import uuid
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import math
 
 # ─────────────────────────────────────────────
-# 1.  Memory dataclass
+# 1.  Memory dataclass + Category detection
 # ─────────────────────────────────────────────
+
+
+CATEGORY_KEYWORDS = {
+    "work": [
+        "work",
+        "job",
+        "office",
+        "project",
+        "coding",
+        "developer",
+        "meeting",
+        "deadline",
+        "client",
+        "task",
+        "bug",
+        "feature",
+        "deploy",
+        "team",
+    ],
+    "learning": [
+        "learn",
+        "study",
+        "course",
+        "tutorial",
+        "book",
+        "research",
+        "practice",
+        "training",
+        "education",
+        "knowledge",
+        "skill",
+    ],
+    "personal": [
+        "family",
+        "friend",
+        "home",
+        "house",
+        "weekend",
+        "vacation",
+        "hobby",
+        "sport",
+        "exercise",
+        "gym",
+        "cook",
+        "game",
+    ],
+    "fact": [
+        "fact",
+        "remember",
+        "know",
+        "is",
+        "are",
+        "was",
+        "were",
+        "lives",
+        "born",
+        "name",
+    ],
+    "todo": [
+        "buy",
+        "need",
+        "should",
+        "must",
+        "remember to",
+        "todo",
+        "task",
+        "appointment",
+        "schedule",
+    ],
+}
+
+
+def category_detect(text: str) -> str:
+    """Detect category based on keyword matching."""
+    text_lower = text.lower()
+    best_category = "general"
+    best_score = 0
+
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        score = sum(1 for kw in keywords if kw in text_lower)
+        if score > best_score:
+            best_score = score
+            best_category = category
+
+    return best_category
 
 
 @dataclass
@@ -91,17 +177,20 @@ class MemoryStore:
 
     # ── public API ────────────────────────────────────────────────────────
 
-    def add(self, text: str, category: str = "general") -> Memory:
+    def add(self, text: str, category: str = None) -> Memory:
         """
         Embed text → save to SQLite → write .md file.
+        Auto-detects category if not provided.
         Returns the stored Memory object.
         """
+        detected_category = category if category else category_detect(text)
+
         # Build Memory object
         mem = Memory(
             id=str(uuid.uuid4()),
             text=text,
             timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
-            category=category,
+            category=detected_category,
             embedding=self._embed(text),
         )
 
@@ -162,15 +251,45 @@ class MemoryStore:
             return 0.0
         return dot / (norm_a * norm_b)
 
-    def search(self, query: str, top_k: int = 3) -> list[tuple[Memory, float]]:
+    def _recency_score(self, timestamp: str) -> float:
+        """Calculate recency score: 1/(1+days_old). Newer = higher score."""
+        try:
+            mem_time = datetime.fromisoformat(timestamp.rstrip("Z"))
+            days_old = (datetime.utcnow() - mem_time).total_seconds() / 86400
+            return 1 / (1 + days_old)
+        except ValueError:
+            return 0.0
+
+    def search(
+        self, query: str, top_k: int = 3, category: str = None
+    ) -> list[tuple[Memory, dict]]:
         """
-        Embed query → cosine-score every memory → return top-K (memory, score) pairs.
+        Embed query → score every memory using hybrid scorer.
+        Returns list of (memory, score_breakdown_dict) tuples.
+        Score breakdown: {'cosine': x, 'recency': y, 'category_bonus': z, 'total': t}
+        Filter by category if provided.
         """
         query_vec = self._embed(query)
         all_memories = self.load_all()
 
-        scored = [(mem, self._cosine(query_vec, mem.embedding)) for mem in all_memories]
-        scored.sort(key=lambda x: x[1], reverse=True)
+        if category:
+            all_memories = [m for m in all_memories if m.category == category]
+
+        scored = []
+        for mem in all_memories:
+            cosine = self._cosine(query_vec, mem.embedding)
+            recency = self._recency_score(mem.timestamp)
+            category_bonus = 0.1 if category and mem.category == category else 0.0
+            total = 0.6 * cosine + 0.3 * recency + 0.1 * category_bonus
+            breakdown = {
+                "cosine": cosine,
+                "recency": recency,
+                "category_bonus": category_bonus,
+                "total": total,
+            }
+            scored.append((mem, breakdown))
+
+        scored.sort(key=lambda x: x[1]["total"], reverse=True)
         return scored[:top_k]
 
     def load_all(self) -> list[Memory]:

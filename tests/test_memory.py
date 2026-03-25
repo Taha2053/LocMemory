@@ -83,7 +83,7 @@ class TestSearch:
     def test_search_ranks_by_cosine_similarity(self, store, sample_memories):
         results = store.search("programming python code", top_k=3)
 
-        scores = [score for _, score in results]
+        scores = [score["total"] for _, score in results]
         assert scores == sorted(scores, reverse=True)
 
     def test_search_returns_memory_objects(self, store, sample_memories):
@@ -92,7 +92,8 @@ class TestSearch:
         mem, score = results[0]
         assert mem.id is not None
         assert mem.text is not None
-        assert isinstance(score, float)
+        assert isinstance(score, dict)
+        assert "total" in score
 
 
 class TestCount:
@@ -139,4 +140,4 @@ class TestIntegration:
         results = store.search("programming software code", top_k=1)
 
         assert len(results) == 1
-        assert results[0][1] >= 0
+        assert results[0][1]["total"] >= 0
