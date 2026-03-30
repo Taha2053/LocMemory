@@ -1,3 +1,8 @@
 SAVE_DIRECTORY: "~/Desktop/LocMemory-Testing/"
 MEMORIES_DIRECTORY: "memories/"
 DB_PATH: "data/"
+
+SAVE_DIRECTORY: "~/Desktop/LocMemory-Testing/"
+MEMORIES_DIRECTORY: "memories/"
+DB_PATH: "data/"
+LLM_MODEL: "mistral:7b-instruct-v0.3-q4_0"
