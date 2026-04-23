@@ -11,18 +11,18 @@ models:
 
   llm:
     provider: "ollama"
-    model: "mistral"
+    model: "mistral:7b-instruct"
     temperature: 0.3
     max_tokens: 512
 
   extractor_model:
     provider: "ollama"
-    model: "mistral"
+    model: "mistral:7b-instruct"
     temperature: 0.1
 
   summarizer_model:
     provider: "ollama"
-    model: "mistral"
+    model: "mistral:7b-instruct"
     temperature: 0.2
 
 storage:

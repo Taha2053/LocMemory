@@ -17,7 +17,7 @@ from core.config import get_config
 
 
 OLLAMA_URL = "http://localhost:11434"
-DEFAULT_MODEL = "mistral"
+DEFAULT_MODEL = "mistral:7b-instruct"
 
 
 FACT_EXTRACTION_PROMPT = """Extract factual memories from this message.
