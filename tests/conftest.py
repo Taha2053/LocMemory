@@ -1,37 +1,30 @@
 import pytest
-import sqlite3
-import shutil
-import uuid
+import tempfile
 from pathlib import Path
 
-from core.memory import MemoryStore
+from core.graph import GraphManager, TIER_LEAF
 
 
 @pytest.fixture
-def test_db_path(tmp_path):
-    return str(tmp_path / "test_memories.db")
+def temp_db():
+    db_path = tempfile.mktemp(suffix=".db")
+    yield db_path
+    Path(db_path).unlink(missing_ok=True)
 
 
 @pytest.fixture
-def test_md_dir(tmp_path):
-    return str(tmp_path / "memories")
+def gm(temp_db):
+    with GraphManager(temp_db) as manager:
+        yield manager
 
 
 @pytest.fixture
-def store(test_db_path, test_md_dir):
-    return MemoryStore(db_path=test_db_path, md_dir=test_md_dir)
-
-
-@pytest.fixture
-def sample_memories(store):
-    memories = [
-        ("The Eiffel Tower is 330 metres tall.", "fact"),
-        ("Buy oat milk and sourdough bread.", "todo"),
-        ("Finished reading Dune on a rainy Tuesday.", "event"),
-        ("Python uses indentation to define code blocks.", "fact"),
-        ("I went for a morning run along the beach.", "event"),
+def sample_graph(gm):
+    ids = [
+        gm.add_node("The Eiffel Tower is 330 metres tall.", TIER_LEAF, "fact"),
+        gm.add_node("Buy oat milk and sourdough bread.", TIER_LEAF, "todo"),
+        gm.add_node("Finished reading Dune on a rainy Tuesday.", TIER_LEAF, "personal"),
+        gm.add_node("Python uses indentation to define code blocks.", TIER_LEAF, "programming"),
+        gm.add_node("I went for a morning run along the beach.", TIER_LEAF, "health"),
     ]
-    added = []
-    for text, category in memories:
-        added.append(store.add(text, category=category))
-    return added
+    return ids

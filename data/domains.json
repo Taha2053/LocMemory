@@ -1,0 +1,76 @@
+{
+  "domains": {
+    "health": [
+      "health, fitness, wellness, exercise, diet, nutrition, medical, healthcare, gym, body",
+      "I went to the gym today and did a workout",
+      "Feeling tired, need more sleep"
+    ],
+    "engineering": [
+      "engineering, design, architecture, system design, technical specifications, infrastructure",
+      "Building a new system architecture for the project",
+      "Mechanical design and blueprints"
+    ],
+    "programming": [
+      "software development, coding, algorithms, debugging, programming, code, software, development",
+      "Writing Python code for the new feature",
+      "Debugging a tricky memory leak"
+    ],
+    "work": [
+      "work, job, office, meeting, deadline, project, client, task, business, career",
+      "Meeting with the team tomorrow at 10am",
+      "Need to finish this task by Friday"
+    ],
+    "personal": [
+      "personal, family, friends, home, hobby, vacation, weekend, life, home, relationships",
+      "Spent the weekend with family",
+      "My dog needs a walk"
+    ],
+    "finance": [
+      "finance, money, investment, savings, budget, income, expense, banking, stock, trading",
+      "Invested in index funds for retirement",
+      "Budget analysis for this month"
+    ],
+    "learning": [
+      "learning, study, course, tutorial, book, research, education, practice, training, knowledge",
+      "Studying machine learning algorithms",
+      "Read a book about reinforcement learning"
+    ]
+  },
+  "subdomains": {
+    "programming": [
+      "web-development",
+      "mobile-development",
+      "data-science",
+      "devops",
+      "security"
+    ],
+    "work": [
+      "management",
+      "consulting",
+      "freelance",
+      "remote-work",
+      "on-site"
+    ],
+    "health": [
+      "fitness",
+      "nutrition",
+      "mental-health",
+      "medical",
+      "sleep"
+    ],
+    "finance": [
+      "investing",
+      "budgeting",
+      "taxes",
+      "real-estate",
+      "crypto"
+    ],
+    "learning": [
+      "courses",
+      "books",
+      "tutorials",
+      "practice",
+      "research"
+    ]
+  }
+}
