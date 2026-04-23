@@ -39,6 +39,8 @@ def load_config(config_path: str = "core/config.yaml") -> dict:
 
     with open(path, "r") as f:
         return yaml.safe_load(f) or {}
+    
+
 
 
 # ─────────────────────────────────────────────

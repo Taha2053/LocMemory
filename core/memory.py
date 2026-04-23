@@ -192,6 +192,9 @@ class MemoryStore:
             )
             for r in rows
         ]
+    
+    def close(self):
+        self.conn.close()
 
     def delete(self, memory_id: str) -> bool:
         """
