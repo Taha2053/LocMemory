@@ -1,0 +1,108 @@
+system:
+  name: "LocMemory"
+  version: "1.0"
+  environment: "development"
+
+models:
+  embedding:
+    provider: "sentence-transformers"
+    name: "all-MiniLM-L6-v2"
+    device: "cpu"
+
+  llm:
+    provider: "ollama"
+    model: "mistral"
+    temperature: 0.3
+    max_tokens: 512
+
+  extractor_model:
+    provider: "ollama"
+    model: "mistral"
+    temperature: 0.1
+
+  summarizer_model:
+    provider: "ollama"
+    model: "mistral"
+    temperature: 0.2
+
+storage:
+  sqlite_db_path: "data/memory.db"
+  auto_save: true
+  backup_enabled: true
+  backup_interval_minutes: 60
+
+graph:
+  max_nodes: 10000
+  default_edge_weight: 0.1
+  cross_domain_weight_threshold: 0.5
+  traversal_depth: 2
+  max_candidates: 20
+  tiers:
+    context: 1
+    anchor: 2
+    leaf: 3
+    procedural: 4
+
+retrieval:
+  semantic_weight: 0.7
+  graph_weight: 0.3
+  max_results: 20
+  min_similarity: 0.35
+  traversal_depth: 2
+
+classification:
+  domains:
+    - health
+    - engineering
+    - programming
+    - work
+    - personal
+    - finance
+    - learning
+  similarity_threshold: 0.45
+  enable_llm_fallback: true
+
+extraction:
+  enable_background_extraction: true
+  thread_pool_size: 2
+  min_fact_length: 10
+  max_facts_per_message: 5
+
+hebbian:
+  enabled: true
+  decay_lambda: 0.01
+  learning_rate: 0.2
+  max_edge_weight: 5.0
+  min_edge_weight: 0.01
+
+consolidation:
+  enabled: true
+  cluster_min_size: 10
+  run_every_n_additions: 30
+  max_clusters_per_run: 5
+
+procedural:
+  enabled: true
+  run_every_n_interactions: 50
+  cross_domain_threshold: 0.6
+  min_pattern_support: 3
+
+security:
+  pii_detection: true
+  encryption_enabled: true
+  encryption_key_path: "secrets/secret.key"
+
+logging:
+  level: "INFO"
+  log_file: "logs/system.log"
+  retrieval_metrics: true
+  latency_tracking: true
+
+performance:
+  max_retrieval_latency_ms: 100
+  enable_caching: true
+  embedding_batch_size: 16
+
+debug:
+  enable_trace_logs: false
+  save_intermediate_results: false
