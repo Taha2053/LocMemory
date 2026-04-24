@@ -2,6 +2,7 @@
 .env
 .vscode
 __pycache__/
+*.claude
 
 # Ignore the folders
 Rebuilding-stuff-to-learn-from/

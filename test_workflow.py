@@ -15,12 +15,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core.memory.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF, TIER_PROCEDURAL
-from core.classifier import MemoryClassifier
-from core.retriever import GraphRetriever
-from core.hebbian import HebbianUpdater
-from core.consolidator import MemoryConsolidator
-from core.procedural import ProceduralDetector
+from core.memory import (
+    GraphManager,
+    MemoryClassifier,
+    GraphRetriever,
+    HebbianUpdater,
+    MemoryConsolidator,
+    ProceduralDetector,
+    TIER_CONTEXT,
+    TIER_ANCHOR,
+    TIER_LEAF,
+)
 
 
 def print_section(title):

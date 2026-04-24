@@ -23,22 +23,37 @@ from pathlib import Path
 # 1. Config loader
 # ─────────────────────────────────────────────
 
-def load_config(config_path: str = "core/config.yaml") -> dict:
+def load_config(config_path: str = "config.yaml") -> dict:
     """
-    Load configuration from config.yaml.
-    This is where the model name lives — so changing the model
-    never requires touching the code, just the config file.
+    Load configuration from the root config.yaml used by the cognitive
+    memory system and flatten the keys most frequently used by chat.py.
+
+    The underlying YAML is nested (models.llm.model, storage.sqlite_db_path,
+    ...). To keep backward-compat with callers expecting flat keys, we also
+    expose LLM_MODEL, DB_PATH, MEMORIES_DIRECTORY on the returned dict.
 
     Returns:
-        config dict with keys like LLM_MODEL, DB_PATH, etc.
+        config dict with both the nested sections AND flat convenience keys.
     """
     path = Path(config_path)
     if not path.exists():
-        # Fallback defaults if config file is missing
-        return {"LLM_MODEL": "mistral:7b-instruct"}
+        return {
+            "LLM_MODEL": "mistral:7b-instruct",
+            "DB_PATH": "data/memory.db",
+            "MEMORIES_DIRECTORY": "memories/",
+        }
 
     with open(path, "r") as f:
-        return yaml.safe_load(f) or {}
+        data = yaml.safe_load(f) or {}
+
+    llm_section     = (data.get("models") or {}).get("llm") or {}
+    storage_section = data.get("storage") or {}
+
+    data["LLM_MODEL"]          = llm_section.get("model", "mistral:7b-instruct")
+    data["DB_PATH"]             = storage_section.get("sqlite_db_path", "data/memory.db")
+    data["MEMORIES_DIRECTORY"] = storage_section.get("memories_directory", "memories/")
+
+    return data
     
 
 
@@ -107,6 +122,13 @@ def call_llm(
     if model is None:
         config = load_config()
         model  = config.get("LLM_MODEL", "mistral:7b-instruct")
+
+    # Accept derivative tags — if the exact name is not pulled but a
+    # variant is (e.g. user asked "mistral:7b-instruct" and has
+    # "mistral:7b-instruct-v0.3-q4_0"), use the variant.
+    resolved = resolve_model(model)
+    if resolved:
+        model = resolved
 
     # ── Step 2: Build messages list ───────────
     # Ollama chat() expects a list of {"role": ..., "content": ...} dicts
@@ -185,24 +207,66 @@ def call_llm(
 # 4. Model checker utility
 # ─────────────────────────────────────────────
 
-def is_model_available(model: str) -> bool:
+def resolve_model(model: str) -> str | None:
     """
-    Check if a model is already pulled in Ollama.
-    Useful before starting a session — avoids cryptic errors later.
+    Resolve a requested model name against what Ollama has pulled.
 
-    Args:
-        model: model name to check (e.g. "mistral:7b-instruct")
+    Accepts any derivative tag that extends the requested base. Examples:
+        requested "mistral:7b-instruct" matches installed
+        "mistral:7b-instruct-v0.3-q4_0", "mistral:7b-instruct-fp16", etc.
 
-    Returns:
-        True if model is available, False otherwise
+    Matching strategy (first hit wins):
+        1. exact match
+        2. installed tag starts with requested name + separator (-, ., :, @)
+        3. requested name starts with installed tag + separator (reverse)
+        4. same base (before ':') and either side's variant is a prefix
+           of the other's variant
+
+    Returns the installed tag to use, or None if nothing matches.
     """
     try:
         models = ollama.list()
-        # ollama.list() returns a dict with "models" key
         available = [m.model for m in models.models]
-        return model in available
     except Exception:
-        return False
+        return None
+
+    if model in available:
+        return model
+
+    separators = ("-", ".", ":", "@", "_")
+
+    def variant_prefix_match(a: str, b: str) -> bool:
+        if not b.startswith(a):
+            return False
+        rest = b[len(a):]
+        return rest == "" or rest[0] in separators
+
+    for inst in available:
+        if variant_prefix_match(model, inst):
+            return inst
+    for inst in available:
+        if variant_prefix_match(inst, model):
+            return inst
+
+    req_base, _, req_var = model.partition(":")
+    for inst in available:
+        inst_base, _, inst_var = inst.partition(":")
+        if req_base != inst_base:
+            continue
+        if req_var and inst_var and (
+            variant_prefix_match(req_var, inst_var)
+            or variant_prefix_match(inst_var, req_var)
+        ):
+            return inst
+
+    return None
+
+
+def is_model_available(model: str) -> bool:
+    """
+    True if `model` (or any derivative tag of it) is pulled in Ollama.
+    """
+    return resolve_model(model) is not None
 
 
 # ─────────────────────────────────────────────

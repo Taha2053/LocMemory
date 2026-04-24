@@ -2,19 +2,21 @@
 chat.py
 -------
 Main entry point for LocMemory.
-Orchestrates memory.py, context.py, and llm.py
+
+Orchestrates the new cognitive memory stack (graph + retriever + extractor),
+context.py (token-budget packer / prompt builder), and llm.py (Ollama caller)
 into a continuous terminal chat loop.
 
 Run with:
-    uv run python chat.py
+    uv run python -m core.chat
 """
 
 import os
 import sys
 
-from core.memory import MemoryStore
-from core.context import pack_context, build_prompt, count_tokens
-from core.llm import load_config, call_llm, is_model_available
+from core.memory import GraphManager, GraphRetriever, MemoryExtractor, MemoryClassifier
+from core.context import pack_context, build_prompt
+from core.llm import load_config, call_llm, is_model_available, resolve_model
 
 
 # ─────────────────────────────────────────────
@@ -31,25 +33,23 @@ RED    = "\033[91m"
 
 
 # ─────────────────────────────────────────────
-# LOGO — paste your ASCII art between the quotes
-# Keep the triple quotes, just replace the content
+# LOGO
 # ─────────────────────────────────────────────
 
 LOGO = r"""
- █████                         ██████   ██████                                                       
-▒▒███                         ▒▒██████ ██████                                                        
+ █████                         ██████   ██████
+▒▒███                         ▒▒██████ ██████
  ▒███         ██████   ██████  ▒███▒█████▒███   ██████  █████████████    ██████  ████████  █████ ████
- ▒███        ███▒▒███ ███▒▒███ ▒███▒▒███ ▒███  ███▒▒███▒▒███▒▒███▒▒███  ███▒▒███▒▒███▒▒███▒▒███ ▒███ 
- ▒███       ▒███ ▒███▒███ ▒▒▒  ▒███ ▒▒▒  ▒███ ▒███████  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒  ▒███ ▒███ 
- ▒███      █▒███ ▒███▒███  ███ ▒███      ▒███ ▒███▒▒▒   ▒███ ▒███ ▒███ ▒███ ▒███ ▒███      ▒███ ▒███ 
- ███████████▒▒██████ ▒▒██████  █████     █████▒▒██████  █████▒███ █████▒▒██████  █████     ▒▒███████ 
-▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒     ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒       ▒▒▒▒▒███ 
-                                                                                            ███ ▒███ 
-                                                                                           ▒▒██████  
-                                                                                            ▒▒▒▒▒▒   
+ ▒███        ███▒▒███ ███▒▒███ ▒███▒▒███ ▒███  ███▒▒███▒▒███▒▒███▒▒███  ███▒▒███▒▒███▒▒███▒▒███ ▒███
+ ▒███       ▒███ ▒███▒███ ▒▒▒  ▒███ ▒▒▒  ▒███ ▒███████  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒  ▒███ ▒███
+ ▒███      █▒███ ▒███▒███  ███ ▒███      ▒███ ▒███▒▒▒   ▒███ ▒███ ▒███ ▒███ ▒███ ▒███      ▒███ ▒███
+ ███████████▒▒██████ ▒▒██████  █████     █████▒▒██████  █████▒███ █████▒▒██████  █████     ▒▒███████
+▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒     ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒       ▒▒▒▒▒███
+                                                                                            ███ ▒███
+                                                                                           ▒▒██████
+                                                                                            ▒▒▒▒▒▒
 """
 
-# Tagline printed just below the logo
 TAGLINE = "local memory · private · yours"
 
 
@@ -57,118 +57,124 @@ TAGLINE = "local memory · private · yours"
 # CONSTANTS
 # ─────────────────────────────────────────────
 
-TOKEN_BUDGET   = 500   # max tokens for packed memory context
-TOP_K_MEMORIES = 5     # how many memories to retrieve per turn
+TOKEN_BUDGET = 500   # max tokens for packed memory context
 
 
 # ─────────────────────────────────────────────
-# HELPER FUNCTIONS
+# HELPERS
 # ─────────────────────────────────────────────
 
 def clear_screen():
-    """Clear the terminal screen — Windows and Unix compatible."""
     os.system("cls" if os.name == "nt" else "clear")
 
 
 def print_logo():
-    """Print the logo and tagline."""
-    print(YELLOW + LOGO + RESET)
+    print(DIM+ LOGO + RESET)
     print(DIM + f"  {TAGLINE}" + RESET)
     print()
 
 
 def print_startup_info(model: str, memory_count: int):
-    """Print system info line after the logo."""
     print(DIM + f"  model   : {model}" + RESET)
-    print(DIM + f"  memories: {memory_count} stored" + RESET)
+    print(DIM + f"  memories: {memory_count} nodes in graph" + RESET)
     print(DIM + "  type 'exit' to quit · 'clear' to reset screen" + RESET)
     print()
 
 
 def print_response(text: str):
-    """Print the LLM response with a subtle label."""
     print(CYAN + BOLD + "assistant" + RESET)
     print(text.strip())
     print()
 
 
 def print_error(msg: str):
-    """Print an error message in red."""
     print(RED + f"  error: {msg}" + RESET)
     print()
 
 
 # ─────────────────────────────────────────────
 # CORE PIPELINE — one full turn
-# This is the heart of chat.py:
-# retrieve → pack → prompt → LLM → save
+# retrieve (graph) → pack → prompt → LLM → background extract
 # ─────────────────────────────────────────────
 
-def run_pipeline(user_input: str, store: MemoryStore, model: str) -> str:
+def run_pipeline(
+    user_input: str,
+    retriever: GraphRetriever,
+    extractor: MemoryExtractor,
+    model: str,
+) -> str:
     """
-    Execute one full chat turn:
-    1. Retrieve relevant memories for the user input
-    2. Pack them within the token budget
-    3. Build the final prompt
-    4. Call the LLM
-    5. Save the exchange as a new memory
-    Returns the LLM response text.
+    Execute one chat turn:
+      1. Retrieve relevant memory nodes from the cognitive graph
+      2. Pack them within the token budget
+      3. Build the final prompt
+      4. Call the LLM
+      5. Queue background fact extraction for the user message + response
     """
 
-    # Step 1 — retrieve the most relevant memories
-    # search() returns [(Memory, score), ...] sorted by relevance
-    candidates = store.search(user_input, top_k=TOP_K_MEMORIES)
+    # Step 1 — graph retrieval (returns list[dict])
+    candidates = retriever.retrieve(user_input)
 
-    # Step 2 — pack candidates within the token budget
-    # pack_context() drops low-relevance memories if budget is tight
+    # Step 2 — greedy pack
     packed = pack_context(candidates, token_budget=TOKEN_BUDGET)
 
-    # Step 3 — build the full prompt (system instructions + memories + user query)
+    # Step 3 — build prompt
     prompt = build_prompt(query=user_input, packed_memories=packed)
 
-    # Step 4 — call the LLM via Ollama
+    # Step 4 — call Ollama
     response = call_llm(prompt=prompt, model=model)
 
-    # Step 5 — save the full exchange as a new memory
-    # Format: "User: ... \nAssistant: ..." so future retrievals have full context
+    # Step 5 — save the exchange as extracted facts (background, non-blocking)
     exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
-    store.add(exchange, category="exchange")
+    try:
+        extractor.start_background_extraction(exchange)
+    except Exception as e:
+        print(DIM + f"  [warn] background extraction failed: {e}" + RESET)
 
     return response.text
 
 
 # ─────────────────────────────────────────────
-# STARTUP — initialize everything before the loop
+# STARTUP
 # ─────────────────────────────────────────────
 
-def startup() -> tuple[MemoryStore, str]:
+def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, str]:
     """
-    Load config, initialize MemoryStore, verify Ollama is running.
-    Returns (store, model_name) ready for the chat loop.
-    Exits with a clear message if anything is wrong.
+    Load config, initialize the graph memory stack, verify Ollama is running.
+    Returns (graph_manager, retriever, extractor, model_name).
     """
-
-    # Load config.yaml
     config = load_config()
-    model  = config.get("LLM_MODEL", "mistral:7b-instruct-v0.3-q4_0")
-    db_path = config.get("DB_PATH", "data/memories.db")
-    md_dir  = config.get("MEMORIES_DIRECTORY", "memories/")
+    model   = config.get("LLM_MODEL", "mistral:7b-instruct")
+    db_path = config.get("DB_PATH", "data/memory.db")
 
-    # Check Ollama is running and model is available
     if not is_model_available(model):
         print_error(f"model '{model}' not found in Ollama.")
         print(DIM + "  make sure Ollama is running: ollama serve" + RESET)
         print(DIM + f"  and the model is pulled: ollama pull {model}" + RESET)
         sys.exit(1)
 
-    # Initialize the memory store
-    # db_path may be a directory — append filename if so
+    # Resolve to the installed tag (e.g. "mistral:7b-instruct" →
+    # "mistral:7b-instruct-v0.3-q4_0") so every downstream caller uses
+    # the exact name Ollama recognizes.
+    resolved = resolve_model(model)
+    if resolved and resolved != model:
+        print(DIM + f"  using installed tag: {resolved}" + RESET)
+        model = resolved
+
+    # Normalize if db_path points at a directory
     if db_path.endswith("/") or db_path.endswith("\\"):
-        db_path = db_path + "memories.db"
+        db_path = db_path + "memory.db"
 
-    store = MemoryStore(db_path=db_path, md_dir=md_dir)
+    # Boot the cognitive graph
+    gm = GraphManager(db_path=db_path)
+    gm.initialize_db()
+    gm.load_graph()
 
-    return store, model
+    classifier = MemoryClassifier()
+    retriever  = GraphRetriever(gm, classifier=classifier)
+    extractor  = MemoryExtractor(gm, classifier=classifier, ollama_model=model)
+
+    return gm, retriever, extractor, model
 
 
 # ─────────────────────────────────────────────
@@ -176,60 +182,62 @@ def startup() -> tuple[MemoryStore, str]:
 # ─────────────────────────────────────────────
 
 def main():
-    # ── Startup ──────────────────────────────
     clear_screen()
     print_logo()
 
     print(DIM + "  initializing..." + RESET)
-    store, model = startup()
+    gm, retriever, extractor, model = startup()
 
     clear_screen()
     print_logo()
-    print_startup_info(model=model, memory_count=store.count())
+    print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
 
-    # ── Chat loop ────────────────────────────
     while True:
         try:
-            # Print the user prompt indicator and wait for input
             user_input = input(YELLOW + BOLD + "you  " + RESET + "> ").strip()
-
         except (KeyboardInterrupt, EOFError):
-            # Handle Ctrl+C and Ctrl+D gracefully
             print()
             break
 
-        # ── Empty input — just loop again
         if not user_input:
             continue
 
-        # ── Exit command
         if user_input.lower() in ("exit", "quit"):
             break
 
-        # ── Clear command — clears screen but NOT the database
         if user_input.lower() == "clear":
             clear_screen()
             print_logo()
-            print_startup_info(model=model, memory_count=store.count())
+            print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
             continue
 
-        # ── Normal input — run the full pipeline
         print()
         try:
             response_text = run_pipeline(
                 user_input=user_input,
-                store=store,
-                model=model
+                retriever=retriever,
+                extractor=extractor,
+                model=model,
             )
             print_response(response_text)
 
         except Exception as e:
             print_error(str(e))
 
-    # ── Graceful shutdown
+    # Graceful shutdown
     print()
-    print(DIM + "  closing memory store..." + RESET)
-    store.close()
+    print(DIM + "  stopping background extractor..." + RESET)
+    try:
+        extractor.stop()
+    except Exception:
+        pass
+
+    print(DIM + "  closing graph..." + RESET)
+    try:
+        gm.save_graph()
+    except Exception:
+        pass
+    gm.close()
     print(DIM + "  goodbye." + RESET)
     print()
 
