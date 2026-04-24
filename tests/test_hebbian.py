@@ -1,113 +1,114 @@
-"""
-Tests for Hebbian learning.
-"""
+"""Tests for Hebbian edge updates."""
 
-import pytest
+from datetime import datetime, timedelta, timezone
 
-from core.memory.graph import GraphManager, TIER_LEAF
+from core.memory.graph import TIER_LEAF
 from core.memory.hebbian import HebbianUpdater
 
 
-def test_strengthen_pair_creates_edge(gm):
-    """Co-retrieved pair gets co_accessed edge."""
-    # Add nodes
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
+def test_strengthen_edges_updates_existing_edge(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.2)
 
-    # Create Hebbian updater
-    hebbian = HebbianUpdater(gm)
-
-    # Strengthen together
-    hebbian.strengthen_edges([id1, id2])
-
-    # Edge should exist
-    assert gm.graph.has_edge(id1, id2) or gm.graph.has_edge(id2, id1)
+    heb = HebbianUpdater(gm, learning_rate=0.5)
+    count = heb.strengthen_edges([a, b])
+    assert count == 1
+    assert gm.graph.edges[a, b]["weight"] > 0.2
 
 
-def test_strengthen_pair_increases_weight(gm):
-    """Repeated co-retrieval increases weight."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
+def test_strengthen_edges_is_bounded_by_max_weight(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.5)
 
-    hebbian = HebbianUpdater(gm)
-
-    # First strengthening
-    hebbian.strengthen_edges([id1, id2])
-    if gm.graph.has_edge(id1, id2):
-        weight1 = gm.graph.edges[id1, id2].get("weight", 0.1)
-    elif gm.graph.has_edge(id2, id1):
-        weight1 = gm.graph.edges[id2, id1].get("weight", 0.1)
-    else:
-        weight1 = 0.1
-
-    # Second strengthening
-    hebbian.strengthen_edges([id1, id2])
-
-    if gm.graph.has_edge(id1, id2):
-        weight2 = gm.graph.edges[id1, id2].get("weight", 0.1)
-    elif gm.graph.has_edge(id2, id1):
-        weight2 = gm.graph.edges[id2, id1].get("weight", 0.1)
-    else:
-        weight2 = 0.1
-
-    assert weight2 >= weight1
+    heb = HebbianUpdater(gm, learning_rate=0.9, max_weight=1.0)
+    for _ in range(50):
+        heb.strengthen_edges([a, b])
+    assert gm.graph.edges[a, b]["weight"] <= 1.0
 
 
-def test_weight_bounded_at_max(gm):
-    """Weight never exceeds max."""
-    from core.settings.config import get_config
-
-    cfg = get_config()
-    max_weight = cfg.get("hebbian", "max_weight", 5.0)
-
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
-
-    hebbian = HebbianUpdater(gm, max_weight=max_weight)
-
-    # Many strengthenings
-    for _ in range(100):
-        hebbian.strengthen_edges([id1, id2])
-
-    # Get edge weight
-    if gm.graph.has_edge(id1, id2):
-        weight = gm.graph.edges[id1, id2].get("weight", 0.1)
-    elif gm.graph.has_edge(id2, id1):
-        weight = gm.graph.edges[id2, id1].get("weight", 0.1)
-    else:
-        pytest.fail("Edge not created")
-
-    assert weight <= max_weight
+def test_strengthen_edges_skips_missing_node(gm):
+    a = gm.add_node("only", TIER_LEAF, "d")
+    heb = HebbianUpdater(gm)
+    assert heb.strengthen_edges([a, "ghost"]) == 0
 
 
-def test_decay_reduces_weight(gm):
-    """Decay reduces old edge weights."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
-
-    gm.add_edge(id1, id2, "related", 0.9)
-
-    hebbian = HebbianUpdater(gm, decay_lambda=0.5)
-
-    # Apply decay
-    hebbian.apply_decay()
-
-    # Weight should be reduced
-    edge_data = gm.graph.edges[id1, id2]
-    assert edge_data["weight"] < 0.9
+def test_strengthen_edges_requires_two_nodes(gm):
+    a = gm.add_node("solo", TIER_LEAF, "d")
+    heb = HebbianUpdater(gm)
+    assert heb.strengthen_edges([a]) == 0
+    assert heb.strengthen_edges([]) == 0
 
 
-def test_strengthen_node_increases_weight(gm):
-    """Node weight increases on access."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
+def test_apply_decay_reduces_old_weights(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.8)
 
-    gm.add_edge(id1, id2, "related", 0.3)
+    old = (datetime.now(timezone.utc) - timedelta(hours=100)).isoformat().replace("+00:00", "Z")
+    gm.graph.edges[a, b]["last_accessed"] = old
 
-    hebbian = HebbianUpdater(gm)
+    heb = HebbianUpdater(gm, decay_lambda=0.1, min_weight=0.01)
+    updated = heb.apply_decay()
+    assert updated == 1
+    assert gm.graph.edges[a, b]["weight"] < 0.8
 
-    # Update after retrieval
-    hebbian.update_after_retrieval([id1, id2])
 
-    # Edge should be updated
-    assert gm.graph.has_edge(id1, id2)
+def test_apply_decay_respects_min_weight_floor(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.5)
+
+    very_old = (
+        datetime.now(timezone.utc) - timedelta(days=365 * 5)
+    ).isoformat().replace("+00:00", "Z")
+    gm.graph.edges[a, b]["last_accessed"] = very_old
+
+    heb = HebbianUpdater(gm, decay_lambda=1.0, min_weight=0.05)
+    heb.apply_decay()
+    assert gm.graph.edges[a, b]["weight"] >= 0.05
+
+
+def test_update_after_retrieval_returns_stats(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    c = gm.add_node("n3", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.3)
+    gm.add_edge(b, c, weight=0.3)
+
+    heb = HebbianUpdater(gm)
+    stats = heb.update_after_retrieval([a, b, c])
+    assert "edges_decayed" in stats
+    assert "edges_strengthened" in stats
+    assert stats["edges_strengthened"] >= 1
+
+
+def test_get_edge_stats_empty_graph(gm):
+    heb = HebbianUpdater(gm)
+    assert heb.get_edge_stats() == {"count": 0}
+
+
+def test_get_edge_stats_populated(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    c = gm.add_node("n3", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.2)
+    gm.add_edge(b, c, weight=0.8)
+
+    heb = HebbianUpdater(gm)
+    stats = heb.get_edge_stats()
+    assert stats["count"] == 2
+    assert stats["min_weight"] == 0.2
+    assert stats["max_weight"] == 0.8
+    assert 0.2 < stats["avg_weight"] < 0.8
+
+
+def test_reset_edge_weights(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.9)
+
+    heb = HebbianUpdater(gm)
+    heb.reset_edge_weights(weight=0.15)
+    assert gm.graph.edges[a, b]["weight"] == 0.15

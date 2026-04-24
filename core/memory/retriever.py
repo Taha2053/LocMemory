@@ -5,8 +5,10 @@ Retrieves relevant memories from a multi-layer cognitive graph using
 semantic embeddings and graph traversal.
 """
 
+import math
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
@@ -16,18 +18,40 @@ from core.memory.classifier import MemoryClassifier
 from core.settings.config import get_config
 
 
+RECENCY_HALFLIFE_DAYS = 30.0
+
+
+def _recency_score(created_at: str | None) -> float:
+    if not created_at:
+        return 0.0
+    try:
+        ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        age_days = (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
+        return math.exp(-max(age_days, 0.0) / RECENCY_HALFLIFE_DAYS)
+    except Exception:
+        return 0.0
+
+
 @dataclass
 class RetrievedMemory:
-    """A retrieved memory node with its score."""
+    """A retrieved memory node with its score + per-axis breakdown."""
     node_id: str
     text: str
     domain: str
+    subdomain: str
     tier: int
     score: float
     graph_score: float
     semantic_score: float
+    cosine: float
+    recency: float
+    category: float
+    cosine_contribution: float
+    recency_contribution: float
+    category_contribution: float
     depth: int
     edge_weight: float
+    created_at: str
 
 
 class GraphRetriever:
@@ -42,6 +66,9 @@ class GraphRetriever:
         cross_domain_threshold: float = 0.5,
         semantic_weight: float = 0.6,
         graph_weight: float = 0.4,
+        cosine_weight: float = 0.6,
+        recency_weight: float = 0.2,
+        category_weight: float = 0.2,
         min_semantic_score: float = 0.30,
     ):
         self.graph_manager = graph_manager
@@ -51,6 +78,9 @@ class GraphRetriever:
         self.cross_domain_threshold = cross_domain_threshold
         self.semantic_weight = semantic_weight
         self.graph_weight = graph_weight
+        self.cosine_weight = cosine_weight
+        self.recency_weight = recency_weight
+        self.category_weight = category_weight
         self.min_semantic_score = min_semantic_score
 
         self._config = get_config()
@@ -107,8 +137,16 @@ class GraphRetriever:
                 "node_id": r.node_id,
                 "text": r.text,
                 "domain": r.domain,
+                "subdomain": r.subdomain,
                 "tier": r.tier,
                 "score": round(r.score, 4),
+                "cosine": round(r.cosine, 4),
+                "recency": round(r.recency, 4),
+                "category": round(r.category, 4),
+                "cosine_contribution": round(r.cosine_contribution, 4),
+                "recency_contribution": round(r.recency_contribution, 4),
+                "category_contribution": round(r.category_contribution, 4),
+                "created_at": r.created_at,
                 "depth": r.depth,
             }
             for r in results
@@ -215,32 +253,52 @@ class GraphRetriever:
 
             text = node_data.get("text", "")
             domain = node_data.get("domain", "")
+            subdomain = node_data.get("subdomain", "")
             tier = node_data.get("tier", 3)
+            created_at = node_data.get("created_at", "")
 
-            semantic_score = self._compute_similarity(text)
+            cosine = self._compute_similarity(text)
+            recency = _recency_score(created_at)
+            category = 1.0 if domain == self._query_domain else 0.0
 
             graph_score = self._compute_graph_score(
                 depth=depth,
                 edge_weight=edge_weight,
-                domain_match=(domain == self._query_domain),
+                domain_match=(category == 1.0),
                 tier=tier,
             )
 
             combined_score = (
-                self.semantic_weight * semantic_score +
+                self.semantic_weight * cosine +
                 self.graph_weight * graph_score
             )
+
+            c_raw = self.cosine_weight * cosine
+            r_raw = self.recency_weight * recency
+            k_raw = self.category_weight * category
+            total = c_raw + r_raw + k_raw
+            c_pct = (c_raw / total) if total > 0 else 0.0
+            r_pct = (r_raw / total) if total > 0 else 0.0
+            k_pct = (k_raw / total) if total > 0 else 0.0
 
             scored.append(RetrievedMemory(
                 node_id=node_id,
                 text=text,
                 domain=domain,
+                subdomain=subdomain,
                 tier=tier,
                 score=combined_score,
                 graph_score=graph_score,
-                semantic_score=semantic_score,
+                semantic_score=cosine,
+                cosine=cosine,
+                recency=recency,
+                category=category,
+                cosine_contribution=c_pct,
+                recency_contribution=r_pct,
+                category_contribution=k_pct,
                 depth=depth,
                 edge_weight=edge_weight,
+                created_at=created_at,
             ))
 
         return scored

@@ -5,6 +5,7 @@ Provides PII detection and AES-GCM encryption for sensitive memory nodes.
 """
 
 import base64
+import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -34,7 +35,7 @@ PII_PATTERNS = {
     ),
     # Password: lines containing password, pwd, pass
     "password": re.compile(
-        r"(?i)\b(?:password|pwd|pass)[:\s][^\s]{4,}"
+        r"(?i)\b(?:password|pwd|pass)\s*[:=]\s*\S{4,}"
     ),
     # Credit card: 16-digit with optional dashes/spaces
     "credit_card": re.compile(
@@ -144,7 +145,7 @@ class MemoryEncryptor:
             return text
 
         # Generate random nonce
-        nonce = AESGCM.generate_key(bit_length=self.NONCE_SIZE * 8)
+        nonce = os.urandom(self.NONCE_SIZE)
 
         # Encrypt
         ciphertext = self._aesgcm.encrypt(nonce, text.encode("utf-8"), None)

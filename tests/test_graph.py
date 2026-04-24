@@ -1,154 +1,125 @@
-"""
-Tests for GraphStore CRUD operations.
-"""
+"""Tests for GraphManager CRUD and persistence."""
 
-import pytest
-
-from core.memory.graph import GraphManager, TIER_LEAF, TIER_CONTEXT, TIER_ANCHOR
-
-
-def test_domain_nodes_seeded(gm):
-    """All 8 domains exist after init."""
-    # Should seed domains on initialize
-    domains = ["health", "work", "personal", "programming", "finance", "learning", "engineering", "social"]
-
-    for domain in domains:
-        nodes = gm.get_nodes_by_domain(domain)
-        # Domain should have at least the context node
-        assert len(nodes) >= 1
+from core.memory.graph import (
+    GraphManager,
+    TIER_CONTEXT,
+    TIER_ANCHOR,
+    TIER_LEAF,
+    TIER_PROCEDURAL,
+    TIER_NAMES,
+)
 
 
-def test_add_leaf_node(gm):
-    """Add tier-3 node, retrieve by id."""
-    node_id = gm.add_node("Test fact", TIER_LEAF, "test_domain")
-
-    # Verify node exists
-    nodes = gm.get_nodes_by_domain("test_domain")
-    ids = [n["id"] for n in nodes]
-    assert node_id in ids
-
-    # Verify tier
-    node_data = gm.graph.nodes[node_id]
-    assert node_data["tier"] == TIER_LEAF
+def test_add_node_returns_id_and_appears_in_graph(gm):
+    node_id = gm.add_node("A fact", TIER_LEAF, "personal")
+    assert isinstance(node_id, str) and len(node_id) > 0
+    assert node_id in gm.graph
+    assert gm.graph.nodes[node_id]["tier"] == TIER_LEAF
+    assert gm.graph.nodes[node_id]["domain"] == "personal"
+    assert gm.graph.nodes[node_id]["text"] == "A fact"
 
 
-def test_add_edge(gm):
-    """Add edge, verify weight stored."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
-
-    gm.add_edge(id1, id2, "related", 0.5)
-
-    # Verify edge exists
-    assert gm.graph.has_edge(id1, id2)
-    edge_data = gm.graph.edges[id1, id2]
-    assert edge_data["weight"] == 0.5
+def test_add_node_deduplicates_identical_text(gm):
+    a = gm.add_node("Same fact", TIER_LEAF, "work")
+    b = gm.add_node("Same fact", TIER_LEAF, "work")
+    assert a == b
+    assert gm.graph.number_of_nodes() == 1
 
 
-def test_get_children(gm):
-    """Add parent+children, verify get_children()."""
-    parent = gm.add_node("Parent node", TIER_CONTEXT, "test")
-    child1 = gm.add_node("Child 1", TIER_LEAF, "test")
-    child2 = gm.add_node("Child 2", TIER_LEAF, "test")
-
-    gm.add_edge(parent, child1, "has_child", 0.8)
-    gm.add_edge(parent, child2, "has_child", 0.8)
-
-    children = gm.get_neighbors(parent, direction="out")
-    child_ids = [c["id"] for c in children]
-
-    assert child1 in child_ids
-    assert child2 in child_ids
+def test_add_node_does_not_dedupe_across_domains(gm):
+    a = gm.add_node("Shared text", TIER_LEAF, "work")
+    b = gm.add_node("Shared text", TIER_LEAF, "personal")
+    assert a != b
 
 
-def test_get_neighbors(gm):
-    """Verify bidirectional neighbor lookup."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
-
-    gm.add_edge(id1, id2, "related", 0.5)
-
-    # Out neighbors
-    out_neighbors = gm.get_neighbors(id1, direction="out")
-    out_ids = [n["id"] for n in out_neighbors]
-    assert id2 in out_ids
-
-    # In neighbors
-    in_neighbors = gm.get_neighbors(id2, direction="in")
-    in_ids = [n["id"] for n in in_neighbors]
-    assert id1 in in_ids
+def test_add_edge_stores_weight_and_relation(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    assert gm.add_edge(a, b, relation="links", weight=0.7) is True
+    assert gm.graph.has_edge(a, b)
+    data = gm.graph.edges[a, b]
+    assert data["relation"] == "links"
+    assert data["weight"] == 0.7
 
 
-def test_update_node_weight(gm):
-    """Update weight, verify persisted."""
-    node_id = gm.add_node("Test node", TIER_LEAF, "test")
-    node_id2 = gm.add_node("Test node 2", TIER_LEAF, "test")
-    gm.add_edge(node_id, node_id2, "related", 0.3)
-
-    # Try to update - may fail if edge not found
-    try:
-        gm.update_edge_weight(node_id, node_id2, "related", 0.9)
-    except Exception:
-        pass  # May not exist in expected format
-
-    # Verify edge exists
-    assert gm.graph.has_edge(node_id, node_id2)
-
-    # Update weight
-    gm.update_edge_weight(node_id, node_id2, "related", 0.9)
-
-    # Verify persisted
-    edge_data = gm.graph.edges[node_id, node_id2]
-    assert edge_data["weight"] == 0.9
+def test_add_edge_rejects_missing_nodes(gm):
+    a = gm.add_node("exists", TIER_LEAF, "d")
+    assert gm.add_edge(a, "nonexistent-id") is False
 
 
-def test_delete_node_cascades_edges(gm):
-    """Delete node, verify edges removed."""
-    id1 = gm.add_node("Node 1", TIER_LEAF, "test")
-    id2 = gm.add_node("Node 2", TIER_LEAF, "test")
+def test_update_edge_weight_persists_in_memory_and_db(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    gm.add_edge(a, b, weight=0.1)
 
-    gm.add_edge(id1, id2, "related", 0.5)
+    assert gm.update_edge_weight(a, b, 0.9) is True
+    assert gm.graph.edges[a, b]["weight"] == 0.9
 
-    # Delete node
-    if hasattr(gm, "delete_node"):
-        gm.delete_node(id1)
-    else:
-        # Remove all edges first
-        if id1 in gm.graph:
-            for neighbor in list(gm.graph.neighbors(id1)):
-                gm.graph.remove_edge(id1, neighbor)
-            gm.graph.remove_node(id1)
-
-    # Verify edge removed
-    assert not gm.graph.has_edge(id1, id2)
+    row = gm.conn.execute(
+        "SELECT weight FROM edges WHERE source_id=? AND target_id=?", (a, b)
+    ).fetchone()
+    assert row["weight"] == 0.9
 
 
-def test_networkx_loader(gm):
-    """load_networkx() returns correct node/edge count."""
-    # Add some nodes
-    for i in range(5):
-        gm.add_node(f"Node {i}", TIER_LEAF, "test")
-
-    # Add edges
-    node_ids = list(gm.graph.nodes)
-    for i in range(len(node_ids) - 1):
-        gm.add_edge(node_ids[i], node_ids[i + 1], "related", 0.5)
-
-    # Get stats and verify
-    stats = gm.stats()
-    assert stats["node_count"] >= 5
-    assert stats["edge_count"] >= 4
+def test_update_edge_weight_missing_edge_returns_false(gm):
+    a = gm.add_node("n1", TIER_LEAF, "d")
+    b = gm.add_node("n2", TIER_LEAF, "d")
+    assert gm.update_edge_weight(a, b, 0.5) is False
 
 
-def test_stats(gm):
-    """stats() returns correct tier counts."""
-    # Add nodes in different tiers
-    gm.add_node("Context", TIER_CONTEXT, "test")
-    gm.add_node("Anchor", TIER_ANCHOR, "test")
-    for i in range(3):
-        gm.add_node(f"Leaf {i}", TIER_LEAF, "test")
+def test_get_nodes_by_tier(gm):
+    gm.add_node("ctx", TIER_CONTEXT, "d")
+    gm.add_node("leaf1", TIER_LEAF, "d")
+    gm.add_node("leaf2", TIER_LEAF, "d")
 
-    stats = gm.stats()
+    leaves = gm.get_nodes_by_tier(TIER_LEAF)
+    texts = {n["text"] for n in leaves}
+    assert texts == {"leaf1", "leaf2"}
 
-    assert stats["node_count"] >= 5
-    assert stats["edge_count"] >= 0
+
+def test_get_nodes_by_domain(gm):
+    gm.add_node("x", TIER_LEAF, "work")
+    gm.add_node("y", TIER_LEAF, "work")
+    gm.add_node("z", TIER_LEAF, "personal")
+
+    work = gm.get_nodes_by_domain("work")
+    assert len(work) == 2
+    assert all(n["domain"] == "work" for n in work)
+
+
+def test_get_neighbors_direction(gm):
+    a = gm.add_node("a", TIER_LEAF, "d")
+    b = gm.add_node("b", TIER_LEAF, "d")
+    c = gm.add_node("c", TIER_LEAF, "d")
+    gm.add_edge(a, b)
+    gm.add_edge(c, a)
+
+    succ_ids = {n["id"] for n in gm.get_neighbors(a, direction="successors")}
+    pred_ids = {n["id"] for n in gm.get_neighbors(a, direction="predecessors")}
+    both_ids = {n["id"] for n in gm.get_neighbors(a, direction="both")}
+
+    assert succ_ids == {b}
+    assert pred_ids == {c}
+    assert both_ids == {b, c}
+
+
+def test_persistence_reload_recovers_graph(temp_db):
+    with GraphManager(temp_db) as gm:
+        a = gm.add_node("persist me", TIER_LEAF, "work")
+        b = gm.add_node("and me", TIER_LEAF, "work")
+        gm.add_edge(a, b, weight=0.42)
+
+    with GraphManager(temp_db) as gm2:
+        assert gm2.graph.number_of_nodes() == 2
+        assert gm2.graph.number_of_edges() == 1
+        ids_by_text = {d["text"]: n for n, d in gm2.graph.nodes(data=True)}
+        assert "persist me" in ids_by_text and "and me" in ids_by_text
+        edge = gm2.graph.edges[ids_by_text["persist me"], ids_by_text["and me"]]
+        assert edge["weight"] == 0.42
+
+
+def test_tier_constants_mapped():
+    assert TIER_NAMES[TIER_CONTEXT] == "context"
+    assert TIER_NAMES[TIER_ANCHOR] == "anchor"
+    assert TIER_NAMES[TIER_LEAF] == "leaf"
+    assert TIER_NAMES[TIER_PROCEDURAL] == "procedural"

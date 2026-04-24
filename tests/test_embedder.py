@@ -1,72 +1,43 @@
-"""
-Tests for embedder/embedding operations.
-"""
+"""Tests for embedding behavior via MemoryClassifier._embed."""
 
-import pytest
-import numpy as np
-
-from core.memory.classifier import MemoryClassifier
+import math
 
 
-def test_embed_single_string(classifier_with_mock):
-    """Embedding single string returns shape (384,)."""
-    classifier = MemoryClassifier()
-    emb = classifier.embed("test string")
-
-    assert emb.shape == (384,)
+def test_embed_single_returns_384_dim(classifier):
+    emb = classifier._embed(["some text"])[0]
+    assert len(emb) == 384
 
 
-def test_embed_list(classifier_with_mock):
-    """Embedding list returns shape (n, 384)."""
-    classifier = MemoryClassifier()
-    texts = ["test one", "test two", "test three"]
-    emb = classifier.embed(texts)
-
-    assert emb.shape == (3, 384)
+def test_embed_batch_returns_one_per_input(classifier):
+    embs = classifier._embed(["one", "two", "three"])
+    assert len(embs) == 3
+    assert all(len(e) == 384 for e in embs)
 
 
-def test_cosine_similarity_identical(classifier_with_mock):
-    """Identical texts should have similarity ~1.0."""
-    classifier = MemoryClassifier()
-    text = "test string"
-
-    emb1 = classifier.embed(text)
-    emb2 = classifier.embed(text)
-
-    # Compute cosine similarity
-    sim = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
-    assert abs(sim) > 0.99
+def test_identical_texts_have_high_similarity(classifier):
+    a, b = classifier._embed(["hello world", "hello world"])
+    sim = classifier._cosine_similarity(a, b)
+    assert sim > 0.99
 
 
-def test_cosine_similarity_orthogonal(classifier_with_mock):
-    """Orthogonal vectors should have similarity ~0."""
-    classifier = MemoryClassifier()
+def test_unrelated_texts_have_lower_similarity(classifier):
+    a, b = classifier._embed([
+        "I love running every morning",
+        "quarterly financial report numbers",
+    ])
+    sim_same, _ = classifier._embed(["I love running every morning", "I love running every morning"])
+    sim_same_val = classifier._cosine_similarity(sim_same, _)
 
-    # Use known different texts
-    text1 = "apple orange banana"
-    text2 = "xyz999 something"
-
-    emb1 = classifier.embed(text1)
-    emb2 = classifier.embed(text2)
-
-    sim = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
-
-    # Not exactly 0, but should be low
-    assert sim < 0.5
+    sim_diff = classifier._cosine_similarity(a, b)
+    assert sim_diff < sim_same_val
 
 
-def test_batch_cosine_similarity():
-    """Batch cosine similarity returns correct values."""
-    classifier = MemoryClassifier()
+def test_cosine_similarity_zero_vector(classifier):
+    assert classifier._cosine_similarity([0.0, 0.0, 0.0], [1.0, 2.0, 3.0]) == 0.0
 
-    texts = ["test one", "test two"]
-    embeddings = classifier.embed(texts)
 
-    # Compute individual similarities
-    sim_01 = np.dot(embeddings[0], embeddings[1]) / (
-        np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
-    )
-
-    # Should match batch result
-    # (We just verify batch works without error)
-    assert embeddings.shape[0] == 2
+def test_cosine_similarity_is_bounded(classifier):
+    a, b = classifier._embed(["anything at all", "totally different content"])
+    sim = classifier._cosine_similarity(a, b)
+    assert -1.0 - 1e-6 <= sim <= 1.0 + 1e-6
+    assert not math.isnan(sim)

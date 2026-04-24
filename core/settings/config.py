@@ -222,6 +222,17 @@ class Config:
     def debug(self) -> dict[str, Any]:
         return self._data.get("debug", {})
 
+    def as_dict(self) -> dict[str, Any]:
+        return self._data
+
+    def update(self, new_data: dict[str, Any]):
+        """Replace the in-memory config with new_data (deep merged by top-level section)."""
+        for section, values in new_data.items():
+            if isinstance(values, dict) and isinstance(self._data.get(section), dict):
+                self._data[section].update(values)
+            else:
+                self._data[section] = values
+
     def save(self, path: Optional[str] = None):
         path = Path(path) if path else self.config_path
         with open(path, "w") as f:
