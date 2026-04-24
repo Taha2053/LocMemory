@@ -39,6 +39,11 @@
       "\u001b[A",
       "Related to terminal commands",
       "terminal commands activities and topics"
+    ],
+    "userinterfaceinteraction": [
+      "test query",
+      "Related to userinterfaceinteraction",
+      "userinterfaceinteraction activities and topics"
     ]
   },
   "subdomains": {
@@ -77,6 +82,7 @@
       "practice",
       "research"
     ],
-    "terminal commands": []
+    "terminal commands": [],
+    "userinterfaceinteraction": []
   }
 }
