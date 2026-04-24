@@ -50,11 +50,16 @@ class GraphManager:
                 text TEXT NOT NULL,
                 tier INTEGER NOT NULL,
                 domain TEXT NOT NULL DEFAULT '',
+                subdomain TEXT NOT NULL DEFAULT '',
                 embedding BLOB,
                 created_at TEXT NOT NULL,
                 metadata TEXT
             )
         """)
+
+        existing_cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(nodes)").fetchall()}
+        if "subdomain" not in existing_cols:
+            self.conn.execute("ALTER TABLE nodes ADD COLUMN subdomain TEXT NOT NULL DEFAULT ''")
 
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS edges (
@@ -74,6 +79,9 @@ class GraphManager:
         """)
         self.conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_nodes_domain ON nodes(domain)
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_nodes_subdomain ON nodes(subdomain)
         """)
         self.conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id)
@@ -111,6 +119,7 @@ class GraphManager:
                 text=row["text"],
                 tier=row["tier"],
                 domain=row["domain"],
+                subdomain=row["subdomain"] if "subdomain" in row.keys() else "",
                 embedding=embedding,
                 created_at=row["created_at"],
             )
@@ -132,6 +141,7 @@ class GraphManager:
         text: str,
         tier: int,
         domain: str = "",
+        subdomain: str = "",
         embedding: list[float] | None = None,
         metadata: dict | None = None,
     ) -> str:
@@ -143,8 +153,6 @@ class GraphManager:
         if self.graph is None:
             raise RuntimeError("Graph not loaded. Call load_graph() first.")
 
-        # Deduplicate: if a node with the same text/tier/domain already exists,
-        # return its id instead of inserting a duplicate.
         normalized = text.strip().lower()
         for existing_id, data in self.graph.nodes(data=True):
             if (
@@ -162,10 +170,10 @@ class GraphManager:
 
         self.conn.execute(
             """
-            INSERT INTO nodes (id, text, tier, domain, embedding, created_at, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO nodes (id, text, tier, domain, subdomain, embedding, created_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (node_id, text, tier, domain, embedding_json, timestamp, metadata_json),
+            (node_id, text, tier, domain, subdomain, embedding_json, timestamp, metadata_json),
         )
         self.conn.commit()
 
@@ -174,6 +182,7 @@ class GraphManager:
             text=text,
             tier=tier,
             domain=domain,
+            subdomain=subdomain,
             embedding=embedding,
             created_at=timestamp,
         )
@@ -242,6 +251,37 @@ class GraphManager:
             for node in self.graph
             if self.graph.nodes[node].get("domain") == domain
         ]
+
+    def get_nodes_by_subdomain(self, subdomain: str) -> list[dict]:
+        """Retrieve all nodes in a specific subdomain from in-memory graph."""
+        if self.graph is None:
+            raise RuntimeError("Graph not loaded. Call load_graph() first.")
+
+        return [
+            {"id": node, **self.graph.nodes[node]}
+            for node in self.graph
+            if self.graph.nodes[node].get("subdomain") == subdomain
+        ]
+
+    def update_node_text(self, node_id: str, new_text: str) -> bool:
+        if self.graph is None:
+            raise RuntimeError("Graph not loaded. Call load_graph() first.")
+        if node_id not in self.graph:
+            return False
+        self.conn.execute("UPDATE nodes SET text = ? WHERE id = ?", (new_text, node_id))
+        self.conn.commit()
+        self.graph.nodes[node_id]["text"] = new_text
+        return True
+
+    def delete_node(self, node_id: str) -> bool:
+        if self.graph is None:
+            raise RuntimeError("Graph not loaded. Call load_graph() first.")
+        if node_id not in self.graph:
+            return False
+        self.conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+        self.conn.commit()
+        self.graph.remove_node(node_id)
+        return True
 
     def update_edge_weight(self, source_id: str, target_id: str, new_weight: float) -> bool:
         """

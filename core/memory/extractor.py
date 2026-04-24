@@ -143,20 +143,26 @@ class MemoryExtractor:
         for fact_data in facts:
             fact_text = fact_data["fact"]
             domain = fact_data.get("domain")
+            subdomain = ""
 
             if not domain or domain == "general":
                 classification = self.classifier.classify(fact_text)
                 domain = classification.get("domain", "general")
+                subdomain = classification.get("subdomain", "")
+            else:
+                subdomain, _ = self.classifier.detect_subdomain(fact_text, domain)
 
             try:
                 node_id = self.graph_manager.add_node(
                     text=fact_text,
                     tier=TIER_LEAF,
                     domain=domain,
+                    subdomain=subdomain,
                     embedding=None,
                 )
                 node_ids.append(node_id)
-                print(f"  + Stored: {fact_text[:50]}... [{domain}]")
+                tag = f"{domain}/{subdomain}" if subdomain else domain
+                print(f"  + Stored: {fact_text[:50]}... [{tag}]")
             except Exception as e:
                 print(f"Failed to store fact: {e}")
 

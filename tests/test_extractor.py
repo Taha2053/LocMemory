@@ -1,136 +1,98 @@
-"""
-Tests for fact extraction.
-"""
+"""Tests for MemoryExtractor: JSON parsing + graph writes (Ollama mocked)."""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from core.memory.extractor import MemoryExtractor
-from core.memory.graph import GraphManager, TIER_LEAF
+from core.memory.graph import TIER_LEAF
+
+from tests.conftest import make_ollama_response
 
 
-def test_parse_facts_valid_json(mock_ollama):
-    """Valid JSON should parse to fact dicts."""
-    with patch("requests.post") as mock_post:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": '[{"fact": "Extracted fact", "confidence": 0.9, "domain": "test"}]'
-        }
-        mock_post.return_value = mock_response
-
-        gm = GraphManager(":memory:")
-        gm.initialize_db()
-        gm.load_graph()
-
-        extractor = MemoryExtractor(gm)
-        facts = extractor.extract_facts("test message")
-
-        assert len(facts) >= 0
+def test_parse_facts_plain_json_array(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    out = ext._parse_facts('[{"fact": "User likes coffee", "domain": "personal"}]')
+    assert len(out) == 1
+    assert out[0]["fact"] == "User likes coffee"
+    assert out[0]["domain"] == "personal"
 
 
-def test_parse_facts_invalid_json(mock_ollama):
-    """Invalid JSON should return empty list."""
-    with patch("requests.post") as mock_post:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "not json at all {{{"}
-        mock_post.return_value = mock_response
-
-        gm = GraphManager(":memory:")
-        gm.initialize_db()
-        gm.load_graph()
-
-        extractor = MemoryExtractor(gm)
-        facts = extractor.extract_facts("test")
-
-        # Should return empty or filtered
-        assert isinstance(facts, list)
+def test_parse_facts_strips_markdown_fences(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    raw = '```json\n[{"fact": "Fact from markdown", "domain": "work"}]\n```'
+    out = ext._parse_facts(raw)
+    assert len(out) == 1
+    assert out[0]["fact"] == "Fact from markdown"
 
 
-def test_parse_facts_low_confidence(mock_ollama):
-    """Low confidence facts should be filtered."""
-    with patch("requests.post") as mock_post:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": '[{"fact": "Low conf", "confidence": 0.2, "domain": "test"}]'
-        }
-        mock_post.return_value = mock_response
-
-        gm = GraphManager(":memory:")
-        gm.initialize_db()
-        gm.load_graph()
-
-        extractor = MemoryExtractor(gm)
-        facts = extractor.extract_facts("test")
-
-        # Low confidence should be filtered
-        assert len(facts) == 0
+def test_parse_facts_invalid_returns_empty(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    assert ext._parse_facts("not json at all {{{") == []
 
 
-def test_parse_facts_strips_markdown(mock_ollama):
-    """Markdown code blocks should be stripped."""
-    with patch("requests.post") as mock_post:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": '```json\n[{"fact": "Test fact", "confidence": 0.9}]\n```'
-        }
-        mock_post.return_value = mock_response
-
-        gm = GraphManager(":memory:")
-        gm.initialize_db()
-        gm.load_graph()
-
-        extractor = MemoryExtractor(gm)
-        facts = extractor.extract_facts("test")
-
-        # Should parse despite markdown
-        assert isinstance(facts, list)
+def test_parse_facts_drops_too_short(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    out = ext._parse_facts('[{"fact": "ab", "domain": "x"}, {"fact": "long enough", "domain": "x"}]')
+    assert len(out) == 1
+    assert out[0]["fact"] == "long enough"
 
 
-def test_hard_add_creates_node(gm):
-    """hard_add should create node."""
-    from core.memory.extractor import MemoryExtractor
-
-    extractor = MemoryExtractor(gm)
-
-    # Direct add without Ollama
-    node_id = extractor.hard_add("Test fact", "test_domain")
-
-    # Verify exists
-    assert node_id is not None
-
-    # Check in graph
-    nodes = gm.get_nodes_by_domain("test_domain")
-    ids = [n["id"] for n in nodes]
-    assert node_id in ids
+def test_parse_facts_defaults_domain_to_general(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    out = ext._parse_facts('[{"fact": "No domain provided here"}]')
+    assert out[0]["domain"] == "general"
 
 
-def test_hard_add_high_importance(gm):
-    """High importance flag should work."""
-    from core.memory.extractor import MemoryExtractor
+def test_extract_facts_mocked_ollama_end_to_end(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    with patch(
+        "core.memory.extractor.requests.post",
+        return_value=make_ollama_response(
+            '[{"fact": "User loves hiking", "domain": "personal"}]'
+        ),
+    ):
+        facts = ext.extract_facts("I went hiking this weekend")
+    assert facts == [{"fact": "User loves hiking", "domain": "personal"}]
 
-    extractor = MemoryExtractor(gm)
 
-    # Add with high importance
-    node_id = extractor.hard_add("Important fact", "test_domain", importance=1.0)
+def test_extract_facts_handles_connection_error(gm, classifier):
+    import requests
 
-    # Verify exists
-    assert node_id is not None
+    ext = MemoryExtractor(gm, classifier=classifier)
+    with patch(
+        "core.memory.extractor.requests.post",
+        side_effect=requests.exceptions.ConnectionError(),
+    ):
+        assert ext.extract_facts("anything") == []
 
 
-def test_hard_add_links_to_domain(gm):
-    """Node should link to domain."""
-    from core.memory.extractor import MemoryExtractor
+def test_process_message_writes_leaf_nodes(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    with patch(
+        "core.memory.extractor.requests.post",
+        return_value=make_ollama_response(
+            '[{"fact": "User is learning Rust", "domain": "learning"}]'
+        ),
+    ):
+        ids = ext.process_message("I started learning Rust")
 
-    extractor = MemoryExtractor(gm)
+    assert len(ids) == 1
+    node = gm.graph.nodes[ids[0]]
+    assert node["tier"] == TIER_LEAF
+    assert node["domain"] == "learning"
+    assert "Rust" in node["text"]
 
-    # Add
-    node_id = extractor.hard_add("Fact", "programming")
 
-    # Should have edge to domain
-    neighbors = gm.get_neighbors(node_id, direction="in")
-    # Just verify no error
-    assert isinstance(neighbors, list)
+def test_process_message_reclassifies_when_domain_missing(gm, classifier):
+    ext = MemoryExtractor(gm, classifier=classifier)
+    with patch(
+        "core.memory.extractor.requests.post",
+        return_value=make_ollama_response(
+            '[{"fact": "User debugs python memory leaks regularly", "domain": "general"}]'
+        ),
+    ):
+        ids = ext.process_message("I debugged a python memory leak")
+
+    assert len(ids) == 1
+    domain = gm.graph.nodes[ids[0]]["domain"]
+    assert domain != "general"
+    assert domain in classifier.list_domains()
