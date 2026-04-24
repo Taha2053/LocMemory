@@ -130,6 +130,18 @@ class GraphManager:
         if self.graph is None:
             raise RuntimeError("Graph not loaded. Call load_graph() first.")
 
+        # Deduplicate: if a node with the same text/tier/domain already exists,
+        # return its id instead of inserting a duplicate.
+        normalized = text.strip().lower()
+        for existing_id, data in self.graph.nodes(data=True):
+            if (
+                data.get("tier") == tier
+                and data.get("domain", "") == domain
+                and str(data.get("text", "")).strip().lower() == normalized
+            ):
+                print(f"Skipped duplicate node: {existing_id[:8]}... {text[:50]}")
+                return existing_id
+
         node_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         embedding_json = json.dumps(embedding) if embedding else None

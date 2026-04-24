@@ -7,6 +7,7 @@ Extracts structured facts from conversation messages and stores them in the grap
 import json
 import queue
 import threading
+import time
 from typing import Optional
 
 import requests
@@ -204,12 +205,30 @@ class MemoryExtractor:
             except queue.Empty:
                 continue
 
-    def stop(self):
-        """Stop the background worker."""
+    def stop(self, drain_timeout: float = 120.0):
+        """
+        Stop the background worker, waiting for pending extractions to finish
+        so facts are actually persisted before shutdown.
+        """
+        if not self._running:
+            return
+
+        pending = self._task_queue.qsize()
+        if pending:
+            print(f"[Background] Draining {pending} pending extraction(s) "
+                  f"(up to {drain_timeout:.0f}s)...")
+
+        try:
+            deadline = time.time() + drain_timeout
+            while not self._task_queue.empty() and time.time() < deadline:
+                time.sleep(0.2)
+        except Exception:
+            pass
+
         self._running = False
         self._task_queue.put(None)
         if self._worker_thread:
-            self._worker_thread.join(timeout=5.0)
+            self._worker_thread.join(timeout=drain_timeout)
         print("[Background] Extractor worker stopped")
 
     def __enter__(self):

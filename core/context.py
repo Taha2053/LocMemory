@@ -83,10 +83,11 @@ def build_prompt(query: str, packed_memories: list[dict]) -> str:
     """Assemble the final prompt string to send to the local LLM."""
     system = (
         "You are a helpful personal assistant with persistent memory.\n"
-        "You have access to relevant memories from past conversations.\n"
-        "Use these memories to give personalized, context-aware answers.\n"
-        "If the memories are not relevant to the question, "
-        "answer from your own knowledge.\n"
+        "The MEMORY CONTEXT below contains candidate facts from past conversations.\n"
+        "Only use a memory if it is DIRECTLY relevant to the user's current query.\n"
+        "Ignore memories that are unrelated to the topic the user is asking about —\n"
+        "do NOT mention or reference them. If none of the memories are relevant,\n"
+        "answer purely from general knowledge without referring to the memory block.\n"
     )
 
     if packed_memories:

@@ -40,6 +40,7 @@ class GraphRetriever:
         cross_domain_threshold: float = 0.5,
         semantic_weight: float = 0.6,
         graph_weight: float = 0.4,
+        min_semantic_score: float = 0.30,
     ):
         self.graph_manager = graph_manager
         self.classifier = classifier or MemoryClassifier()
@@ -48,10 +49,12 @@ class GraphRetriever:
         self.cross_domain_threshold = cross_domain_threshold
         self.semantic_weight = semantic_weight
         self.graph_weight = graph_weight
+        self.min_semantic_score = min_semantic_score
 
         self._config = get_config()
         self._embedding_cache: dict[str, list[float]] = {}
         self._query_embedding: Optional[list[float]] = None
+        self._query_domain: Optional[str] = None
 
     def retrieve(self, query: str) -> list[dict]:
         """
@@ -61,13 +64,14 @@ class GraphRetriever:
         """
         start_time = time.time()
         self._query_embedding = None
-        self._embedding_cache = {}
 
-        query_domain = self.classifier.detect_domain(query)[0]
+        self._query_domain = self.classifier.detect_domain(query)[0]
 
-        candidates = self._traverse_graph(query_domain)
+        candidates = self._traverse_graph(self._query_domain)
 
         scored = self._score_candidates(query, candidates)
+
+        scored = [s for s in scored if s.semantic_score >= self.min_semantic_score]
 
         scored.sort(key=lambda x: x.score, reverse=True)
 
@@ -197,7 +201,7 @@ class GraphRetriever:
             graph_score = self._compute_graph_score(
                 depth=depth,
                 edge_weight=edge_weight,
-                domain_match=(domain == self.classifier.detect_domain(query)[0]),
+                domain_match=(domain == self._query_domain),
                 tier=tier,
             )
 

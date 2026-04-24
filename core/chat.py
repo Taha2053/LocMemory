@@ -14,9 +14,12 @@ Run with:
 import os
 import sys
 
+from rich.console import Console
+
 from core.memory import GraphManager, GraphRetriever, MemoryExtractor, MemoryClassifier
 from core.context import pack_context, build_prompt
 from core.llm import load_config, call_llm, is_model_available, resolve_model
+from core.tui import CommandHandler
 
 
 # ─────────────────────────────────────────────
@@ -30,25 +33,30 @@ YELLOW = "\033[93m"
 DIM    = "\033[2m"
 GREEN  = "\033[92m"
 RED    = "\033[91m"
+BLUE   = "\033[38;5;33m"   # native blue
+GOLD   = "\033[38;5;220m"  # gold
 
 
 # ─────────────────────────────────────────────
 # LOGO
 # ─────────────────────────────────────────────
 
-LOGO = r"""
- █████                         ██████   ██████
-▒▒███                         ▒▒██████ ██████
- ▒███         ██████   ██████  ▒███▒█████▒███   ██████  █████████████    ██████  ████████  █████ ████
- ▒███        ███▒▒███ ███▒▒███ ▒███▒▒███ ▒███  ███▒▒███▒▒███▒▒███▒▒███  ███▒▒███▒▒███▒▒███▒▒███ ▒███
- ▒███       ▒███ ▒███▒███ ▒▒▒  ▒███ ▒▒▒  ▒███ ▒███████  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒  ▒███ ▒███
- ▒███      █▒███ ▒███▒███  ███ ▒███      ▒███ ▒███▒▒▒   ▒███ ▒███ ▒███ ▒███ ▒███ ▒███      ▒███ ▒███
- ███████████▒▒██████ ▒▒██████  █████     █████▒▒██████  █████▒███ █████▒▒██████  █████     ▒▒███████
-▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒     ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒  ▒▒▒▒▒       ▒▒▒▒▒███
-                                                                                            ███ ▒███
-                                                                                           ▒▒██████
-                                                                                            ▒▒▒▒▒▒
-"""
+LOGO_LOC = [
+    r" _                ",
+    r"| |    ___   ___  ",
+    r"| |   / _ \ / __| ",
+    r"| |__| (_) | (__  ",
+    r"|_____\___/ \___| ",
+]
+
+LOGO_MEMORY = [
+    r" __  __                                      ",
+    r"|  \/  |  ___  _ __ ___    ___   _ __  _   _ ",
+    r"| |\/| | / _ \| '_ ` _ \  / _ \ | '__|| | | |",
+    r"| |  | ||  __/| | | | | || (_) || |   | |_| |",
+    r"|_|  |_| \___||_| |_| |_| \___/ |_|    \__, |",
+    r"                                        |___/ ",
+]
 
 TAGLINE = "local memory · private · yours"
 
@@ -69,7 +77,12 @@ def clear_screen():
 
 
 def print_logo():
-    print(DIM+ LOGO + RESET)
+    # Render "Loc" (blue) and "Memory" (gold) side by side, line for line.
+    print()
+    for i in range(max(len(LOGO_LOC), len(LOGO_MEMORY))):
+        left  = LOGO_LOC[i]    if i < len(LOGO_LOC)    else " " * len(LOGO_LOC[0])
+        right = LOGO_MEMORY[i] if i < len(LOGO_MEMORY) else ""
+        print(BOLD + BLUE + left + RESET + BOLD + GOLD + right + RESET)
     print(DIM + f"  {TAGLINE}" + RESET)
     print()
 
@@ -77,7 +90,7 @@ def print_logo():
 def print_startup_info(model: str, memory_count: int):
     print(DIM + f"  model   : {model}" + RESET)
     print(DIM + f"  memories: {memory_count} nodes in graph" + RESET)
-    print(DIM + "  type 'exit' to quit · 'clear' to reset screen" + RESET)
+    print(DIM + "  type /help for commands · /exit to quit · /clear to reset screen" + RESET)
     print()
 
 
@@ -102,6 +115,7 @@ def run_pipeline(
     retriever: GraphRetriever,
     extractor: MemoryExtractor,
     model: str,
+    extraction_enabled: bool = True,
 ) -> str:
     """
     Execute one chat turn:
@@ -125,11 +139,12 @@ def run_pipeline(
     response = call_llm(prompt=prompt, model=model)
 
     # Step 5 — save the exchange as extracted facts (background, non-blocking)
-    exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
-    try:
-        extractor.start_background_extraction(exchange)
-    except Exception as e:
-        print(DIM + f"  [warn] background extraction failed: {e}" + RESET)
+    if extraction_enabled:
+        exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
+        try:
+            extractor.start_background_extraction(exchange)
+        except Exception as e:
+            print(DIM + f"  [warn] background extraction failed: {e}" + RESET)
 
     return response.text
 
@@ -188,9 +203,14 @@ def main():
     print(DIM + "  initializing..." + RESET)
     gm, retriever, extractor, model = startup()
 
+    def render_banner():
+        print_logo()
+        print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
+
     clear_screen()
-    print_logo()
-    print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
+    render_banner()
+
+    handler = CommandHandler(gm, extractor, on_clear=render_banner)
 
     while True:
         try:
@@ -202,14 +222,12 @@ def main():
         if not user_input:
             continue
 
-        if user_input.lower() in ("exit", "quit"):
-            break
-
-        if user_input.lower() == "clear":
-            clear_screen()
-            print_logo()
-            print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
-            continue
+        if handler.is_command(user_input):
+            result = handler.handle(user_input)
+            if result.should_exit:
+                break
+            if result.skip_pipeline:
+                continue
 
         print()
         try:
@@ -218,6 +236,7 @@ def main():
                 retriever=retriever,
                 extractor=extractor,
                 model=model,
+                extraction_enabled=handler.extraction_enabled,
             )
             print_response(response_text)
 
@@ -226,7 +245,7 @@ def main():
 
     # Graceful shutdown
     print()
-    print(DIM + "  stopping background extractor..." + RESET)
+    print(DIM + "  flushing background extractor (waiting for pending saves)..." + RESET)
     try:
         extractor.stop()
     except Exception:
