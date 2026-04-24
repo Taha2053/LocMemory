@@ -13,7 +13,7 @@ from core.memory.retriever import GraphRetriever, RetrievedMemory
 from core.memory.consolidator import MemoryConsolidator
 from core.memory.hebbian import HebbianUpdater
 from core.memory.procedural import ProceduralDetector, Pattern
-from core.dashboard.memory import MemoryStore, Memory
+from core.memory.memory import MemoryStore, Memory
 
 __all__ = [
     "Config",
