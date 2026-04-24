@@ -12,3 +12,8 @@ docs/
 # Ignore the files
 *.md
 *.db
+*.log
+
+# Ignore secret key
+data/secret.key
+data/rl_agent.zip

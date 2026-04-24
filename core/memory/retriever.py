@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
+import numpy as np
+
 from core.memory.graph import GraphManager
 from core.memory.classifier import MemoryClassifier
 from core.settings.config import get_config
@@ -56,6 +58,20 @@ class GraphRetriever:
         self._query_embedding: Optional[list[float]] = None
         self._query_domain: Optional[str] = None
 
+        # RL agent for intelligent selection
+        self._rl_agent = None
+        self._rl_enabled = self._config.get("rl", "enabled", False)
+        if self._rl_enabled:
+            try:
+                from core.rl.agent import RLAgent
+
+                model_path = self._config.get("rl", "model_path", "data/rl_agent.zip")
+                self._rl_agent = RLAgent(model_path)
+                if not self._rl_agent.is_available():
+                    self._rl_agent = None
+            except Exception:
+                self._rl_agent = None
+
     def retrieve(self, query: str) -> list[dict]:
         """
         Retrieve relevant memories for the query.
@@ -76,6 +92,11 @@ class GraphRetriever:
         scored.sort(key=lambda x: x.score, reverse=True)
 
         results = scored[:self.max_candidates]
+
+        # RL-based selection if agent available
+        if self._rl_agent is not None and self._query_embedding is not None:
+            token_budget = self._config.get("rl", "token_budget", 512)
+            results = self._rl_select(results, token_budget)
 
         elapsed_ms = (time.time() - start_time) * 1000
         if elapsed_ms > 80:
@@ -258,6 +279,55 @@ class GraphRetriever:
 
         graph_score = edge_weight * depth_weight * tier_bonus * domain_bonus
         return min(graph_score, 1.0)
+
+    def _rl_select(
+        self,
+        candidates: list,
+        token_budget: int,
+    ) -> list:
+        """
+        Use RL agent for intelligent candidate selection.
+
+        Falls back to hybrid scoring if RL fails.
+        """
+        if self._rl_agent is None:
+            return candidates[: self._config.get("rl", "top_k", 5)]
+
+        try:
+            from core.rl.agent import RetrievalResult
+
+            # Build RetrievalResult
+            result = RetrievalResult(
+                candidates=[
+                    {
+                        "node_id": c.node_id,
+                        "text": c.text,
+                        "domain": c.domain,
+                        "tier": c.tier,
+                        "score": c.score,
+                        "hebbian": c.edge_weight,
+                        "last_accessed": "",
+                    }
+                    for c in candidates
+                ],
+                context_str="",
+            )
+
+            # Get query embedding
+            query_emb = (
+                np.array(self._query_embedding, dtype=np.float32)
+                if self._query_embedding
+                else np.zeros(384, dtype=np.float32)
+            )
+
+            # Use RL agent to select
+            selected = self._rl_agent.select(result, query_emb, token_budget)
+
+            return selected if selected else candidates
+
+        except Exception:
+            # Silent fallback
+            return candidates[: self._config.get("rl", "top_k", 5)]
 
     def retrieve_with_context(
         self,

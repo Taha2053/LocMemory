@@ -90,7 +90,7 @@ procedural:
 security:
   pii_detection: true
   encryption_enabled: true
-  encryption_key_path: "secrets/secret.key"
+  key_path: "data/secret.key"
 
 logging:
   level: "INFO"
@@ -106,3 +106,11 @@ performance:
 debug:
   enable_trace_logs: false
   save_intermediate_results: false
+
+rl:
+  enabled: true
+  model_path: "data/rl_agent.zip"
+  training_timesteps: 10000
+  candidate_pool_size: 25
+  top_k: 5
+  token_budget: 512

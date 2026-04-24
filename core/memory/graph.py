@@ -51,7 +51,8 @@ class GraphManager:
                 tier INTEGER NOT NULL,
                 domain TEXT NOT NULL DEFAULT '',
                 embedding BLOB,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                metadata TEXT
             )
         """)
 
@@ -83,6 +84,17 @@ class GraphManager:
 
         self.conn.commit()
         print(f"Database initialized: {self.db_path}")
+
+    def seed_domains(self):
+        """Create domain context nodes if they don't exist."""
+        domains = [
+            "health", "engineering", "programming", "work",
+            "personal", "finance", "learning", "social"
+        ]
+        for domain in domains:
+            existing = self.get_nodes_by_domain(domain)
+            if not existing:
+                self.add_node(f"{domain} context", TIER_CONTEXT, domain)
 
     def load_graph(self):
         """Load nodes and edges from SQLite into a NetworkX graph in RAM."""
@@ -121,6 +133,7 @@ class GraphManager:
         tier: int,
         domain: str = "",
         embedding: list[float] | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """
         Add a node to the graph and persist to SQLite.
@@ -145,13 +158,14 @@ class GraphManager:
         node_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         embedding_json = json.dumps(embedding) if embedding else None
+        metadata_json = json.dumps(metadata) if metadata else None
 
         self.conn.execute(
             """
-            INSERT INTO nodes (id, text, tier, domain, embedding, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO nodes (id, text, tier, domain, embedding, created_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (node_id, text, tier, domain, embedding_json, timestamp),
+            (node_id, text, tier, domain, embedding_json, timestamp, metadata_json),
         )
         self.conn.commit()
 
@@ -257,6 +271,26 @@ class GraphManager:
 
         print(f"Updated edge weight: {source_id[:8]}... -> {target_id[:8]}... = {new_weight}")
         return True
+
+    def stats(self) -> dict:
+        """Get graph statistics."""
+        if self.graph is None:
+            return {"tier_counts": 0, "edge_count": 0}
+
+        tier_counts = {}
+        for node_id in self.graph.nodes:
+            tier = self.graph.nodes[node_id].get("tier", 3)
+            tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+        return {
+            "tier_counts": tier_counts,
+            "edge_count": self.graph.number_of_edges(),
+            "node_count": self.graph.number_of_nodes(),
+        }
+
+    def load_networkx(self):
+        """Return the NetworkX graph (for compatibility)."""
+        return self.graph
 
     def get_neighbors(self, node_id: str, direction: str = "both") -> list[dict]:
         """
