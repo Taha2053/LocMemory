@@ -41,16 +41,22 @@ class CommandHandler:
         self.console = console or Console()
         self.on_clear = on_clear
         self.extraction_enabled = True
+        self.is_running = False
 
     # ─────────────────────────── public api ───────────────────────────
 
     def is_command(self, text: str) -> bool:
-        return text.startswith("/")
+        # Commands with / prefix only
+        return text.strip().startswith("/")
 
     def handle(self, text: str) -> CommandResult:
-        parts = text[1:].strip().split(maxsplit=1)
+        # Strip the / prefix
+        cmd_text = text.strip()
+        if cmd_text.startswith("/"):
+            cmd_text = cmd_text[1:]
+        
+        parts = cmd_text.strip().split(maxsplit=1)
         if not parts:
-            self._err("empty command. try /help")
             return CommandResult(handled=True)
 
         cmd = parts[0].lower()
@@ -58,13 +64,15 @@ class CommandHandler:
 
         dispatch = {
             "help":       self._cmd_help,
+            "run":        self._cmd_run,
+            "stop":       self._cmd_stop,
+            "mem":        self._cmd_mem,
+            "dashboard":  self._cmd_dashboard,
+            "exit":       self._cmd_exit,
+            "quit":       self._cmd_exit,
             "clear":      self._cmd_clear,
             "stats":      self._cmd_stats,
             "list":       self._cmd_list,
-            "activate":   self._cmd_activate,
-            "deactivate": self._cmd_deactivate,
-            "exit":       self._cmd_exit,
-            "quit":       self._cmd_exit,
         }
         handler = dispatch.get(cmd)
         if handler is None:
@@ -87,18 +95,58 @@ class CommandHandler:
         table.add_column("description")
 
         rows = [
-            ("/help",              "show this help"),
-            ("/clear",             "clear the screen"),
-            ("/stats",             "show graph statistics (nodes, edges, tiers, domains)"),
-            ("/list [category]",   "list memories; optional category filters by domain"),
-            ("/activate",          "enable background fact extraction (default)"),
-            ("/deactivate",        "pause background fact extraction"),
-            ("/exit  |  /quit",    "leave the chat"),
+            ("help",              "show this help"),
+            ("run",              "start chat interface"),
+            ("stop",             "stop chat interface"),
+            ("mem",             "show memory statistics"),
+            ("dashboard",        "open dashboard (not implemented yet)"),
+            ("exit | quit",      "leave the chat"),
+            ("clear",            "clear the screen"),
+            ("stats",           "show graph statistics"),
+            ("list [category]",  "list memories"),
         ]
         for cmd, desc in rows:
             table.add_row(cmd, desc)
 
         self.console.print(table)
+        return CommandResult(handled=True)
+
+    def _cmd_run(self, _: str) -> CommandResult:
+        if self.is_running:
+            self.console.print("[green]Already running.[/]")
+            return CommandResult(handled=True)
+        self.is_running = True
+        self.extraction_enabled = True
+        self.console.print("[bold green]Memory saving enabled.[/]")
+        return CommandResult(handled=True, skip_pipeline=False)
+
+    def _cmd_stop(self, _: str) -> CommandResult:
+        self.is_running = False
+        self.extraction_enabled = False
+        self.console.print("[bold yellow]Memory saving paused.[/]")
+        return CommandResult(handled=True)
+
+    def _cmd_mem(self, _: str) -> CommandResult:
+        g = self.gm.graph
+        tier_counts: dict[int, int] = {}
+        for _nid, data in g.nodes(data=True):
+            tier = data.get("tier", 0)
+            tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+        self.console.print(f"[bold]Memory Statistics[/]")
+        self.console.print(f"  Total nodes: {g.number_of_nodes()}")
+        self.console.print(f"  Total edges: {g.number_of_edges()}")
+        self.console.print(f"  Extraction: {'on' if self.extraction_enabled else 'off'}")
+        self.console.print()
+        self.console.print("[bold]Nodes by tier:[/]")
+        for tier, count in sorted(tier_counts.items()):
+            name = TIER_NAMES.get(tier, f"tier{tier}")
+            self.console.print(f"  {name}: {count}")
+        return CommandResult(handled=True)
+
+    def _cmd_dashboard(self, _: str) -> CommandResult:
+        self.console.print("[bold yellow]Dashboard not yet implemented.[/]")
+        self.console.print("[dim]Coming soon...[/]")
         return CommandResult(handled=True)
 
     def _cmd_clear(self, _: str) -> CommandResult:

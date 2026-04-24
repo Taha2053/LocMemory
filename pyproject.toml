@@ -1,9 +1,10 @@
 [project]
 name = "locmemory"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local-first cognitive memory system with graph-based storage"
 readme = "README.md"
 requires-python = ">=3.10"
+
 dependencies = [
     "numpy>=2.2.6",
     "ollama>=0.6.1",
@@ -14,16 +15,12 @@ dependencies = [
     "python-louvain>=0.16",
     "scipy>=1.11.0",
     "requests>=2.31.0",
-    "rich>=13.0.0",
     "gymnasium>=0.29.0",
     "stable-baselines3>=2.0.0",
     "matplotlib>=3.7.0",
     "cryptography>=42.0.0",
     "pytest-cov>=4.0.0",
 ]
-
-[project.scripts]
-LocMemory = "core.chat:main"
 
 [build-system]
 requires = ["hatchling"]
