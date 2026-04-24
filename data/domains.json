@@ -34,6 +34,11 @@
       "learning, study, course, tutorial, book, research, education, practice, training, knowledge",
       "Studying machine learning algorithms",
       "Read a book about reinforcement learning"
+    ],
+    "terminal commands": [
+      "\u001b[A",
+      "Related to terminal commands",
+      "terminal commands activities and topics"
     ]
   },
   "subdomains": {
@@ -71,6 +76,7 @@
       "tutorials",
       "practice",
       "research"
-    ]
+    ],
+    "terminal commands": []
   }
 }

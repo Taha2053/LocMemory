@@ -1,11 +1,9 @@
 """
-LocMemory - Local Memory System
+Cognitive Memory Components
 
-A local-first memory system using graph-based storage, semantic embeddings,
-and LLM-powered retrieval.
+Graph-based memory storage, classification, retrieval, and learning.
 """
 
-from core.settings.config import Config, get_config
 from core.memory.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF, TIER_PROCEDURAL
 from core.memory.classifier import MemoryClassifier
 from core.memory.extractor import MemoryExtractor
@@ -13,11 +11,8 @@ from core.memory.retriever import GraphRetriever, RetrievedMemory
 from core.memory.consolidator import MemoryConsolidator
 from core.memory.hebbian import HebbianUpdater
 from core.memory.procedural import ProceduralDetector, Pattern
-from core.dashboard.memory import MemoryStore, Memory
 
 __all__ = [
-    "Config",
-    "get_config",
     "GraphManager",
     "MemoryClassifier",
     "MemoryExtractor",
@@ -31,8 +26,4 @@ __all__ = [
     "TIER_ANCHOR",
     "TIER_LEAF",
     "TIER_PROCEDURAL",
-    "MemoryStore",
-    "Memory",
 ]
-
-__version__ = "1.0.0"

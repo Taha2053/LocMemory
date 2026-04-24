@@ -9,8 +9,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Optional
 
-from core.graph import GraphManager, TIER_PROCEDURAL
-from core.config import get_config
+from core.memory.graph import GraphManager, TIER_PROCEDURAL
+from core.settings.config import get_config
 
 
 @dataclass
@@ -160,7 +160,7 @@ class ProceduralDetector:
 
         embedding = None
         try:
-            from core.classifier import MemoryClassifier
+            from core.memory.classifier import MemoryClassifier
             classifier = MemoryClassifier()
             embedding = classifier._embed([combined_text])[0]
         except Exception:
@@ -267,7 +267,7 @@ class ProceduralDetector:
 
 
 if __name__ == "__main__":
-    from core.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
+    from core.memory.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
 
     print("Building test graph with cross-domain patterns...")
     with GraphManager("data/test_procedural.db") as gm:

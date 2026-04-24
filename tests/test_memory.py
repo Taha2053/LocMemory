@@ -3,10 +3,10 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from core.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF, TIER_PROCEDURAL
-from core.classifier import MemoryClassifier
-from core.retriever import GraphRetriever
-from core.hebbian import HebbianUpdater
+from core.memory.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF, TIER_PROCEDURAL
+from core.memory.classifier import MemoryClassifier
+from core.memory.retriever import GraphRetriever
+from core.memory.hebbian import HebbianUpdater
 
 
 @pytest.fixture

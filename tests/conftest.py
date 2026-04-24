@@ -2,7 +2,7 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from core.graph import GraphManager, TIER_LEAF
+from core.memory.graph import GraphManager, TIER_LEAF
 
 
 @pytest.fixture

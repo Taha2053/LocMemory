@@ -8,7 +8,7 @@ to update relationships between memory nodes.
 import math
 from datetime import datetime, timezone
 
-from core.graph import GraphManager
+from core.memory.graph import GraphManager
 
 
 class HebbianUpdater:
@@ -208,7 +208,7 @@ class HebbianUpdater:
 
 
 if __name__ == "__main__":
-    from core.graph import GraphManager, TIER_LEAF
+    from core.memory.graph import GraphManager, TIER_LEAF
 
     print("Building test graph...")
     with GraphManager("data/test_hebbian.db") as gm:

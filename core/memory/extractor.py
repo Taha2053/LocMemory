@@ -11,9 +11,9 @@ from typing import Optional
 
 import requests
 
-from core.graph import GraphManager, TIER_LEAF
-from core.classifier import MemoryClassifier
-from core.config import get_config
+from core.memory.graph import GraphManager, TIER_LEAF
+from core.memory.classifier import MemoryClassifier
+from core.settings.config import get_config
 
 
 OLLAMA_URL = "http://localhost:11434"
@@ -220,7 +220,7 @@ class MemoryExtractor:
 
 
 if __name__ == "__main__":
-    from core.graph import GraphManager
+    from core.memory.graph import GraphManager
 
     with GraphManager("data/test_extract.db") as gm:
         extractor = MemoryExtractor(gm)

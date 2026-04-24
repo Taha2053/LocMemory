@@ -14,8 +14,8 @@ except ImportError:
 
 import networkx as nx
 
-from core.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
-from core.config import get_config
+from core.memory.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
+from core.settings.config import get_config
 
 
 OLLAMA_URL = "http://localhost:11434"
@@ -103,7 +103,7 @@ class MemoryConsolidator:
         ]
 
         try:
-            from core.classifier import MemoryClassifier
+            from core.memory.classifier import MemoryClassifier
             classifier = MemoryClassifier()
             query_embeddings = classifier._embed(texts)
 
@@ -225,7 +225,7 @@ Summary:"""
 
         embedding = None
         try:
-            from core.classifier import MemoryClassifier
+            from core.memory.classifier import MemoryClassifier
             classifier = MemoryClassifier()
             embedding = classifier._embed([combined_text])[0]
         except Exception:
@@ -323,7 +323,7 @@ Summary:"""
 
 
 if __name__ == "__main__":
-    from core.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
+    from core.memory.graph import GraphManager, TIER_LEAF, TIER_ANCHOR
 
     print("Building test graph with leaf nodes...")
     with GraphManager("data/test_consolidate.db") as gm:

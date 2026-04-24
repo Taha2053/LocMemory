@@ -9,9 +9,9 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from core.graph import GraphManager
-from core.classifier import MemoryClassifier
-from core.config import get_config
+from core.memory.graph import GraphManager
+from core.memory.classifier import MemoryClassifier
+from core.settings.config import get_config
 
 
 @dataclass
@@ -284,7 +284,7 @@ class GraphRetriever:
 
 
 if __name__ == "__main__":
-    from core.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF
+    from core.memory.graph import GraphManager, TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF
 
     print("Building test graph...")
     with GraphManager("data/test_retriever.db") as gm:
