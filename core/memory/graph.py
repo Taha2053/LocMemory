@@ -51,7 +51,8 @@ class GraphManager:
                 tier INTEGER NOT NULL,
                 domain TEXT NOT NULL DEFAULT '',
                 embedding BLOB,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                metadata TEXT
             )
         """)
 
@@ -121,6 +122,7 @@ class GraphManager:
         tier: int,
         domain: str = "",
         embedding: list[float] | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """
         Add a node to the graph and persist to SQLite.
@@ -133,13 +135,14 @@ class GraphManager:
         node_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         embedding_json = json.dumps(embedding) if embedding else None
+        metadata_json = json.dumps(metadata) if metadata else None
 
         self.conn.execute(
             """
-            INSERT INTO nodes (id, text, tier, domain, embedding, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO nodes (id, text, tier, domain, embedding, created_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (node_id, text, tier, domain, embedding_json, timestamp),
+            (node_id, text, tier, domain, embedding_json, timestamp, metadata_json),
         )
         self.conn.commit()
 

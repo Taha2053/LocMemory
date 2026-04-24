@@ -51,12 +51,21 @@ class MemoryStore:
             result = self.classifier.classify(text)
             category = result.get("domain", "general")
 
+        # Process for PII and encrypt if needed
+        from core.security.security import process_before_store, get_encryptor
+        processed_text, was_encrypted = process_before_store(text, get_encryptor())
+
         tier = TIER_LEAF
-        node_id = self.gm.add_node(text, tier, category)
+        node_id = self.gm.add_node(
+            processed_text,
+            tier,
+            category,
+            metadata={"encrypted": was_encrypted} if was_encrypted else None,
+        )
 
         return Memory(
             id=node_id,
-            text=text,
+            text=text,  # Return original text
             category=category,
             timestamp="",
         )
@@ -73,11 +82,19 @@ class MemoryStore:
         """
         results = self.retriever.retrieve(query)
 
+        from core.security.security import decrypt_for_retrieval, get_encryptor
+        encryptor = get_encryptor()
+
         output = []
         for r in results[:top_k]:
+            text = r.get("text", "")
+            # Decrypt if encrypted
+            if r.get("encrypted") or encryptor.is_encrypted(text):
+                text = decrypt_for_retrieval(text, encryptor)
+
             mem = Memory(
                 id=r.get("node_id", ""),
-                text=r.get("text", ""),
+                text=text,
                 category=r.get("domain", ""),
             )
             score = {"total": r.get("score", 0)}
