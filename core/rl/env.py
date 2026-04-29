@@ -98,7 +98,11 @@ class RetrievalEnv(gym.Env):
             if options and options.get("candidate_embeddings") is not None
             else None
         )
-        self._token_budget = options.get("token_budget", self.token_budget)
+        self._token_budget = (
+            options.get("token_budget", self.token_budget)
+            if options is not None
+            else self.token_budget
+        )
 
         # Build initial state
         self.observation = self._build_state()
@@ -224,7 +228,9 @@ class RetrievalEnv(gym.Env):
             if i < len(candidates)
         ]
         selected_embs = (
-            self._candidate_embeddings[selected_indices]
+            self._candidate_embeddings[
+                [i for i in selected_indices if i < len(self._candidate_embeddings)]
+            ]
             if self._candidate_embeddings is not None
             else None
         )

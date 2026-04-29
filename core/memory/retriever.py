@@ -69,7 +69,7 @@ class GraphRetriever:
         cosine_weight: float = 0.6,
         recency_weight: float = 0.2,
         category_weight: float = 0.2,
-        min_semantic_score: float = 0.30,
+        min_semantic_score: float = 0.15,
     ):
         self.graph_manager = graph_manager
         self.classifier = classifier or MemoryClassifier()
@@ -164,7 +164,7 @@ class GraphRetriever:
 
         entry_nodes = [
             n for n in graph.nodes
-            if graph.nodes[n].get("domain") == query_domain
+            if graph.nodes[n].get("domain", "").lower() == query_domain.lower()
         ]
 
         if not entry_nodes:
@@ -208,7 +208,7 @@ class GraphRetriever:
         node_data = self.graph_manager.graph.nodes[node_id]
         current_domain = node_data.get("domain", "")
 
-        domain_match = (current_domain == query_domain)
+        domain_match = (current_domain.lower() == query_domain.lower())
         high_weight = (incoming_weight >= self.cross_domain_threshold)
         can_traverse_cross_domain = domain_match or high_weight
 

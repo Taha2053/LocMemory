@@ -121,6 +121,14 @@ class Config:
                 "cross_domain_threshold": 0.6,
                 "min_pattern_support": 3,
             },
+            "rl": {
+                "enabled": True,
+                "model_path": "data/rl_agent.zip",
+                "training_timesteps": 10000,
+                "candidate_pool_size": 25,
+                "top_k": 5,
+                "token_budget": 512,
+            },
             "security": {
                 "pii_detection": True,
                 "encryption_enabled": True,
@@ -205,6 +213,10 @@ class Config:
     @property
     def procedural(self) -> dict[str, Any]:
         return self._data.get("procedural", {})
+
+    @property
+    def rl(self) -> dict[str, Any]:
+        return self._data.get("rl", {})
 
     @property
     def security(self) -> dict[str, Any]:
