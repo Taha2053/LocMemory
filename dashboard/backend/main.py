@@ -8,6 +8,7 @@ React frontend can visualize nodes, edges, and retrieval scores.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -20,6 +21,8 @@ from core.memory.graph import TIER_NAMES
 from core.settings.config import get_config
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 state: dict = {"gm": None, "retriever": None, "classifier": None}
 
 
@@ -27,6 +30,9 @@ state: dict = {"gm": None, "retriever": None, "classifier": None}
 async def lifespan(app: FastAPI):
     config = get_config()
     db_path = config.get("storage", "sqlite_db_path", "data/memory.db")
+    if not Path(db_path).is_absolute():
+        db_path = str(PROJECT_ROOT / db_path)
+    print(f"[dashboard] using db: {db_path}")
 
     gm = GraphManager(db_path=db_path)
     gm.initialize_db()
