@@ -1,8 +1,9 @@
 """
 Training script for RL memory selection agent.
 
-Generates synthetic episodes using the existing graph store
-and trains a PPO agent for intelligent candidate selection.
+Generates synthetic episodes and trains a PPO agent for intelligent
+candidate selection.  Uses a self-contained environment so that
+Stable-Baselines3's learn() loop works correctly without manual stepping.
 """
 
 import csv
@@ -18,6 +19,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from core.memory.graph import GraphManager
 from core.memory.classifier import MemoryClassifier
 from core.memory.retriever import GraphRetriever
+from core.rl.env import RetrievalEnv, RetrievalResult
 from core.settings.config import get_config
 
 
@@ -35,17 +37,134 @@ TRAINING_QUERIES = [
     "how have I been feeling",
 ]
 
-# Domain keywords for query generation
-DOMAIN_KEYWORDS = {
-    "health": ["health", "fitness", "exercise", "gym", "workout", "diet", "sleep"],
-    "engineering": ["engine", "design", "build", "system", "architecture", "infrastructure"],
-    "programming": ["code", "program", "python", "software", "debug", "algorithm"],
-    "work": ["work", "job", "meeting", "deadline", "project", "task", "office"],
-    "personal": ["family", "friend", "home", "hobby", "weekend", "vacation"],
-    "finance": ["money", "invest", "budget", "savings", "stock", " expense"],
-    "learning": ["learn", "study", "course", "book", "research", "practice"],
-    "social": ["social", "friend", "party", "event", "community"],
-}
+SAMPLE_MEMORIES = [
+    "I started exercising three times a week",
+    "Working on a Python machine learning project",
+    "Reading a book about neural networks",
+    "Had a meeting with the team about the deadline",
+    "Saving 20% of my monthly income",
+    "My cousin is visiting next weekend",
+    "Finished the online course on deep learning",
+    "Bought a new GPU for training models",
+    "Went for a run this morning",
+    "The budget review is scheduled for Friday",
+    "Practicing piano every evening",
+    "Deployed the new API endpoint to production",
+    "Studying for the certification exam",
+    "Investing in index funds for retirement",
+    "Family dinner planned for Sunday",
+    "Fixed a critical bug in the auth module",
+    "Learning Spanish with an app",
+    "Completed the marathon training plan",
+    "Refactored the database layer",
+    "Reading research papers on transformers",
+]
+
+DOMAINS = ["health", "engineering", "programming", "work", "personal", "finance", "learning"]
+
+
+class SyntheticRetrievalEnv(RetrievalEnv):
+    """Self-contained RetrievalEnv that generates synthetic episodes on reset.
+
+    Works with SB3's learn() without needing external episode injection.
+    """
+
+    def __init__(
+        self,
+        candidate_pool_size: int = 25,
+        top_k: int = 5,
+        token_budget: int = 512,
+        embedding_dim: int = 384,
+        embedding_model=None,
+    ):
+        super().__init__(
+            candidate_pool_size=candidate_pool_size,
+            top_k=top_k,
+            token_budget=token_budget,
+            embedding_dim=embedding_dim,
+        )
+        self._embedding_model = embedding_model
+
+    def _generate_synthetic_episode(self) -> dict:
+        """Create a random training episode."""
+        query = random.choice(TRAINING_QUERIES)
+
+        # Pick a random subset of sample memories as candidates
+        n_candidates = random.randint(5, self.candidate_pool_size)
+        chosen = random.sample(SAMPLE_MEMORIES, min(n_candidates, len(SAMPLE_MEMORIES)))
+
+        candidates = []
+        for i, text in enumerate(chosen):
+            candidates.append({
+                "node_id": f"syn_{i}",
+                "text": text,
+                "domain": random.choice(DOMAINS),
+                "tier": random.choice([1, 2, 3, 3, 3]),
+                "score": round(random.uniform(0.1, 0.95), 3),
+                "hebbian": round(random.uniform(0.05, 0.5), 3),
+                "last_accessed": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # Pad to candidate_pool_size
+        while len(candidates) < self.candidate_pool_size:
+            idx = len(candidates)
+            candidates.append({
+                "node_id": f"pad_{idx}",
+                "text": "",
+                "domain": "",
+                "tier": 3,
+                "score": 0.0,
+                "hebbian": 0.0,
+                "last_accessed": "",
+            })
+
+        # Generate embeddings
+        if self._embedding_model is not None:
+            query_emb = self._embedding_model.encode(
+                [query], convert_to_numpy=True
+            )[0].astype(np.float32)
+            candidate_texts = [c["text"] for c in candidates]
+            candidate_embs = self._embedding_model.encode(
+                candidate_texts, convert_to_numpy=True
+            ).astype(np.float32)
+        else:
+            # Fallback: random embeddings (still trains, just less meaningful)
+            query_emb = np.random.randn(self.embedding_dim).astype(np.float32)
+            candidate_embs = np.random.randn(
+                self.candidate_pool_size, self.embedding_dim
+            ).astype(np.float32)
+
+        return {
+            "query": query,
+            "query_emb": query_emb,
+            "candidates": candidates,
+            "candidate_embs": candidate_embs,
+            "token_budget": self.token_budget,
+        }
+
+    def reset(self, seed=None, options=None):
+        """Reset with a fresh synthetic episode."""
+        super().reset(seed=seed)
+
+        episode = self._generate_synthetic_episode()
+
+        retrieval_result = RetrievalResult(
+            candidates=episode["candidates"],
+            selected=[],
+            context_str="",
+        )
+
+        opts = {
+            "retrieval_result": retrieval_result,
+            "query_embedding": episode["query_emb"],
+            "candidate_embeddings": episode["candidate_embs"],
+            "token_budget": episode["token_budget"],
+        }
+
+        self.observation = self._build_state()
+        self.episode_reward = 0.0
+
+        return self.observation, {}
 
 
 class RetrievalTrainer:
@@ -76,166 +195,50 @@ class RetrievalTrainer:
         self._setup()
 
     def _setup(self) -> None:
-        """Initialize the graph and retriever."""
-        print("Setting up graph and retriever...")
-
-        # Initialize graph manager
-        db_path = self._config.get(
-            "storage", "sqlite_db_path", "data/memory.db"
-        )
-        self._graph_manager = GraphManager(db_path)
+        """Initialize the graph, classifier, and embedding model."""
+        print("Setting up embedding model...")
 
         # Initialize classifier (provides embeddings)
         self._classifier = MemoryClassifier()
         self._embedding_model = self._classifier._model
 
-        # Initialize retriever
-        self._retriever = GraphRetriever(
-            self._graph_manager,
-            self._classifier,
-            max_candidates=self._candidate_pool_size,
+        # Optionally populate graph for richer episodes
+        db_path = self._config.get(
+            "storage", "sqlite_db_path", "data/memory.db"
         )
-
-    def _generate_variations(self, base_query: str) -> list[str]:
-        """Generate query variations from a base query."""
-        words = base_query.lower().split()
-
-        variations = [base_query]
-
-        # Add some variations with different patterns
-        patterns = [
-            lambda: "tell me about " + " ".join(words[1:]),
-            lambda: "what " + " ".join(words[1:]) if len(words) > 1 else base_query,
-            lambda: base_query + "?",
-            lambda: base_query + " recently",
-        ]
-
-        for _ in range(5):
-            pattern = random.choice(patterns)()
-            if pattern and pattern != base_query:
-                variations.append(pattern)
-
-        return variations
-
-    def _get_query_embedding(self, query: str) -> np.ndarray:
-        """Get embedding for a query."""
-        emb = self._embedding_model.encode([query], convert_to_numpy=True)[0]
-        return emb.astype(np.float32)
-
-    def _create_episode_data(self) -> list[dict]:
-        """Create a batch of training episodes."""
-        episodes = []
-
-        # Select random queries
-        queries = random.choices(TRAINING_QUERIES, k=5)
-
-        for query in queries:
-            # Get retrieval result
-            try:
-                results = self._retriever.retrieve(query)
-            except Exception:
-                results = []
-
-            if not results:
-                # Add dummy data if no results
-                results = [
-                    {
-                        "node_id": f"dummy_{i}",
-                        "text": f"Dummy memory {i} about {query}",
-                        "domain": "personal",
-                        "tier": 3,
-                        "score": 0.5,
-                        "hebbian": 0.1,
-                        "last_accessed": datetime.now(timezone.utc).isoformat(),
-                    }
-                    for i in range(min(self._candidate_pool_size, 10))
-                ]
-
-            # Pad to candidate_pool_size
-            while len(results) < self._candidate_pool_size:
-                idx = len(results)
-                results.append({
-                    "node_id": f"pad_{idx}",
-                    "text": "",
-                    "domain": "",
-                    "tier": 3,
-                    "score": 0.0,
-                    "hebbian": 0.0,
-                    "last_accessed": "",
-                })
-
-            # Get query embedding
-            query_emb = self._get_query_embedding(query)
-
-            # Get candidate embeddings
-            candidate_texts = [r.get("text", "") for r in results]
-            candidate_embs = self._embedding_model.encode(
-                candidate_texts,
-                convert_to_numpy=True,
-            ).astype(np.float32)
-
-            episodes.append({
-                "query": query,
-                "query_emb": query_emb,
-                "candidates": results,
-                "candidate_embs": candidate_embs,
-                "token_budget": self._token_budget,
-            })
-
-        return episodes
-
-    def _build_env_fn(self):
-        """Build the environment for training."""
-        from core.rl.env import RetrievalEnv
-
-        def make_env():
-            # Create episodes
-            episodes = self._create_episode_data()
-
-            class EpisodicEnv(RetrievalEnv):
-                def __init__(self):
-                    super().__init__(
-                        candidate_pool_size=self._candidate_pool_size,
-                        top_k=self._top_k,
-                        token_budget=self._token_budget,
-                        embedding_dim=self._embedding_dim,
-                    )
-
-                def reset(self, seed=None, options=None):
-                    # Use random episode
-                    ep = random.choice(episodes) if episodes else None
-                    if ep:
-                        opts = {
-                            "retrieval_result": type("obj", (object,), {
-                                "candidates": ep["candidates"],
-                            })(),
-                            "query_embedding": ep["query_emb"],
-                            "candidate_embeddings": ep["candidate_embs"],
-                            "token_budget": ep["token_budget"],
-                        }
-                        return super().reset(seed=seed, options=opts)
-                    return super().reset(seed=seed, options=options)
-
-            return make_env() if episodes else None
+        self._graph_manager = GraphManager(db_path)
+        try:
+            self._graph_manager.initialize_db()
+            self._graph_manager.load_graph()
+            if self._graph_manager.graph.number_of_nodes() > 0:
+                self._retriever = GraphRetriever(
+                    self._graph_manager,
+                    self._classifier,
+                    max_candidates=self._candidate_pool_size,
+                )
+                print(f"  Graph loaded: {self._graph_manager.graph.number_of_nodes()} nodes")
+            else:
+                print("  Graph is empty, will use synthetic episodes only")
+        except Exception as e:
+            print(f"  Could not load graph ({e}), using synthetic episodes only")
 
     def train(self) -> None:
-        """Train the RL agent."""
+        """Train the RL agent using synthetic episodes."""
         print("\n" + "=" * 60)
         print("Training RL Agent")
         print("=" * 60)
 
-        # Create environment
-        from core.rl.env import RetrievalEnv
+        # Create self-contained synthetic environment
+        def make_env():
+            return SyntheticRetrievalEnv(
+                candidate_pool_size=self._candidate_pool_size,
+                top_k=self._top_k,
+                token_budget=self._token_budget,
+                embedding_dim=self._embedding_dim,
+                embedding_model=self._embedding_model,
+            )
 
-        env = RetrievalEnv(
-            candidate_pool_size=self._candidate_pool_size,
-            top_k=self._top_k,
-            token_budget=self._token_budget,
-            embedding_dim=self._embedding_dim,
-        )
-
-        # Wrap in vectorized env for SB3
-        env = make_vec_env(lambda: env, n_envs=1)
+        env = make_vec_env(make_env, n_envs=1)
 
         # Create PPO agent
         model = PPO(
@@ -243,7 +246,7 @@ class RetrievalTrainer:
             env,
             verbose=0,
             learning_rate=3e-4,
-            n_steps=2048,
+            n_steps=512,
             batch_size=64,
             n_epochs=10,
             gamma=0.99,
@@ -259,80 +262,49 @@ class RetrievalTrainer:
         csv_writer = csv.writer(log_file)
         csv_writer.writerow(["timestep", "mean_reward", "ep_length"])
 
-        # Training loop
+        # Training loop — just call learn() in chunks so we can log progress
         print(f"Training for {self._training_steps} timesteps...")
         print(f"Logging to {self._log_path}")
 
         rewards_history = []
         start_time = time.time()
+        chunk = 1000
 
         try:
-            for step in range(0, self._training_steps, 1000):
-                # Generate new episodes for each batch
-                episodes = self._create_episode_data()
-
-                # Create fresh env with new episodes
-                ep_env = RetrievalEnv(
-                    candidate_pool_size=self._candidate_pool_size,
-                    top_k=self._top_k,
-                    token_budget=self._token_budget,
-                    embedding_dim=self._embedding_dim,
-                )
-
-                # Reset with random episode
-                ep = random.choice(episodes)
-                obs, _ = ep_env.reset(options={
-                    "retrieval_result": type("obj", (object,), {
-                        "candidates": ep["candidates"],
-                    })(),
-                    "query_embedding": ep["query_emb"],
-                    "candidate_embeddings": ep["candidate_embs"],
-                    "token_budget": ep["token_budget"],
-                })
-
-                # Run a few steps
-                episode_rewards = []
-                for _ in range(min(100, self._training_steps - step)):
-                    # Random action (exploration)
-                    action = env.action_space.sample()
-                    obs, reward, terminated, truncated, info = env.step(action)
-
-                    episode_rewards.append(reward)
-
-                    if terminated or truncated:
-                        # Reset with new episode
-                        ep = random.choice(episodes)
-                        obs, _ = ep_env.reset(options={
-                            "retrieval_result": type("obj", (object,), {
-                                "candidates": ep["candidates"],
-                            })(),
-                            "query_embedding": ep["query_emb"],
-                            "candidate_embeddings": ep["candidate_embs"],
-                            "token_budget": ep["token_budget"],
-                        })
-
-                # Actually train with PPO
+            for step in range(0, self._training_steps, chunk):
                 model.learn(
-                    total_timesteps=1000,
+                    total_timesteps=chunk,
                     progress_bar=False,
                     reset_num_timesteps=False,
                 )
 
-                # Calculate mean reward
-                mean_reward = np.mean(episode_rewards) if episode_rewards else 0.0
+                # Evaluate: run a few episodes to get mean reward
+                eval_rewards = []
+                eval_env = make_env()
+                for _ in range(10):
+                    obs, _ = eval_env.reset()
+                    total_r = 0.0
+                    done = False
+                    while not done:
+                        action, _ = model.predict(obs, deterministic=True)
+                        obs, reward, terminated, truncated, _ = eval_env.step(action)
+                        total_r += reward
+                        done = terminated or truncated
+                    eval_rewards.append(total_r)
+
+                mean_reward = float(np.mean(eval_rewards))
                 rewards_history.append(mean_reward)
 
                 # Log to CSV
                 csv_writer.writerow([
-                    step + 1000,
-                    mean_reward,
-                    len(episode_rewards),
+                    step + chunk,
+                    f"{mean_reward:.4f}",
+                    1,  # single-step episodes
                 ])
                 log_file.flush()
 
-                # Print progress
                 elapsed = time.time() - start_time
-                print(f"  Step {step + 1000}/{self._training_steps} | "
+                print(f"  Step {step + chunk}/{self._training_steps} | "
                       f"Mean reward: {mean_reward:.4f} | "
                       f"Elapsed: {elapsed:.1f}s")
 
@@ -341,6 +313,7 @@ class RetrievalTrainer:
 
         finally:
             log_file.close()
+            env.close()
 
         # Save model
         model_path = self._config.get("rl", "model_path", "data/rl_agent.zip")
@@ -356,6 +329,8 @@ class RetrievalTrainer:
     def _plot_curve(self, rewards: list[float]) -> None:
         """Plot and save the learning curve."""
         try:
+            import matplotlib
+            matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
             plt.figure(figsize=(10, 6))

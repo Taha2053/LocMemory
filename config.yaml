@@ -92,6 +92,14 @@ security:
   encryption_enabled: true
   key_path: "data/secret.key"
 
+rl:
+  enabled: true
+  model_path: "data/rl_agent.zip"
+  training_timesteps: 10000
+  candidate_pool_size: 25
+  top_k: 5
+  token_budget: 512
+
 logging:
   level: "INFO"
   log_file: "logs/system.log"

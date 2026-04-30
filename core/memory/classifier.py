@@ -46,9 +46,15 @@ DEFAULT_DOMAINS = {
         "Budget analysis for this month",
     ],
     "learning": [
-        "learning, study, course, tutorial, book, research, education, practice, training, knowledge",
+        "learning, study, studying, course, lecture, reading, book, learn, progress, chapter, exam, revision, notes, class, subject, homework, tutorial, research, education, practice, training, knowledge, assignment, quiz, test, university, school, college, academic",
         "Studying machine learning algorithms",
         "Read a book about reinforcement learning",
+        "How is my studying going",
+        "What am I learning lately",
+        "How is my course going",
+        "I need to revise my notes for the exam",
+        "Making progress on my reading assignments",
+        "Attended an interesting lecture today",
     ],
 }
 
