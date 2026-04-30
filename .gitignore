@@ -19,10 +19,10 @@ dashboard/frontend/package-lock.json
 # Build outputs
 build/
 dist/
-dashboard/frontend/public/
+
 
 # Third-party libraries
-threejs-brain-animation/
+
 
 # Ignore folders
 Rebuilding-stuff-to-learn-from/
