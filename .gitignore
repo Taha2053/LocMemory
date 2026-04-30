@@ -3,16 +3,31 @@
 .vscode
 __pycache__/
 *.claude
-
-# Ignore the folders
-Rebuilding-stuff-to-learn-from/
-testing/
-docs/
-
-# Ignore the files
 *.md
 *.db
 *.log
+
+# Node modules
+node_modules/
+dashboard/frontend/node_modules/
+
+# Generated files
+*.lock
+package-lock.json
+dashboard/frontend/package-lock.json
+
+# Build outputs
+build/
+dist/
+dashboard/frontend/public/
+
+# Third-party libraries
+threejs-brain-animation/
+
+# Ignore folders
+Rebuilding-stuff-to-learn-from/
+testing/
+docs/
 
 # Ignore secret key
 data/secret.key
