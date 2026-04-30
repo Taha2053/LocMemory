@@ -1,72 +1,401 @@
 import { NavLink } from "react-router-dom"
-import { Network, FileText, FolderTree, Search, Settings, Sun, Moon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Network, FileText, FolderTree, Search, Settings } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
 import { api, type Stats } from "@/lib/api"
-import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
+import { AnimatedNumber } from "@/components/hud"
 
 const links = [
-  { to: "/graph", label: "Graph", icon: Network },
-  { to: "/memories", label: "Memories", icon: FileText },
-  { to: "/domains", label: "Domains", icon: FolderTree },
-  { to: "/retrieval", label: "Retrieval", icon: Search },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/graph",     label: "Graph",     icon: Network,    id: "01", desc: "Neural map" },
+  { to: "/memories",  label: "Memories",  icon: FileText,   id: "02", desc: "Memory store" },
+  { to: "/domains",   label: "Domains",   icon: FolderTree, id: "03", desc: "Knowledge tree" },
+  { to: "/retrieval", label: "Retrieval", icon: Search,     id: "04", desc: "Query engine" },
+  { to: "/settings",  label: "Settings",  icon: Settings,   id: "05", desc: "Config" },
 ]
 
-export function Sidebar() {
-  const [stats, setStats] = useState<Stats | null>(null)
-  const { theme, toggle } = useTheme()
+function NeuralPulse() {
+  return (
+    <div className="px-4 py-4">
+      <div className="text-[8px] uppercase tracking-[0.25em] text-neutral-600 mb-3">
+        // NEURAL ACTIVITY
+      </div>
+      <div className="relative h-10 w-full overflow-hidden rounded-sm"
+        style={{ background: "rgba(6,182,212,0.04)", border: "1px solid rgba(6,182,212,0.1)" }}>
+        <NeuralWaveform />
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[8px] text-neutral-700 uppercase tracking-wider">
+        <span>SIGNAL</span>
+        <span className="text-cyan-600/60 tabular-nums">ACTIVE</span>
+      </div>
+    </div>
+  )
+}
+
+function NeuralWaveform() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const frameRef = useRef<number>(0)
+  const offsetRef = useRef<number>(0)
 
   useEffect(() => {
-    api.stats().then(setStats).catch(() => {})
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const draw = () => {
+      const w = canvas.width
+      const h = canvas.height
+      ctx.clearRect(0, 0, w, h)
+
+      offsetRef.current += 0.04
+
+      ctx.beginPath()
+      ctx.strokeStyle = "rgba(6,182,212,0.7)"
+      ctx.lineWidth = 1.5
+      ctx.shadowColor = "rgba(6,182,212,0.8)"
+      ctx.shadowBlur = 4
+
+      for (let x = 0; x <= w; x += 2) {
+        const t = (x / w) * Math.PI * 6 + offsetRef.current
+        const y = h / 2 + Math.sin(t) * 8 + Math.sin(t * 2.3 + 1) * 4
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+
+      // dim secondary wave
+      ctx.beginPath()
+      ctx.strokeStyle = "rgba(59,130,246,0.3)"
+      ctx.lineWidth = 1
+      ctx.shadowBlur = 0
+      for (let x = 0; x <= w; x += 2) {
+        const t = (x / w) * Math.PI * 4 + offsetRef.current * 0.7 + 2
+        const y = h / 2 + Math.sin(t) * 5 + Math.cos(t * 1.7) * 3
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+
+      frameRef.current = requestAnimationFrame(draw)
+    }
+
+    draw()
+    return () => cancelAnimationFrame(frameRef.current)
   }, [])
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-border bg-card">
-      <div className="border-b border-border px-5 py-4">
-        <div className="text-sm font-semibold tracking-tight">LocMemory</div>
-        <div className="text-xs text-muted-foreground">cognitive memory</div>
+    <canvas
+      ref={canvasRef}
+      width={176}
+      height={40}
+      className="absolute inset-0 h-full w-full"
+    />
+  )
+}
+
+export function Sidebar() {
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [prevStats, setPrevStats] = useState<Stats | null>(null)
+  const [flashing, setFlashing] = useState({ nodes: false, edges: false, domains: false })
+  const [tick, setTick] = useState(0)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchStats = async () => {
+    try {
+      const data = await api.stats()
+      setPrevStats(stats)
+      setStats(data)
+    } catch (e) {
+      console.error("Failed to fetch stats", e)
+    }
+  }
+
+  useEffect(() => {
+    fetchStats()
+    intervalRef.current = setInterval(fetchStats, 10000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [])
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(p => p + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    if (prevStats && stats) {
+      const n = stats.nodes !== prevStats.nodes
+      const e = stats.edges !== prevStats.edges
+      const d = Object.keys(stats.domain_counts).length !== Object.keys(prevStats.domain_counts).length
+      if (n || e || d) {
+        setFlashing({ nodes: n, edges: e, domains: d })
+        setTimeout(() => setFlashing({ nodes: false, edges: false, domains: false }), 600)
+      }
+    }
+  }, [stats, prevStats])
+
+  const domainCount = stats?.domain_counts ? Object.keys(stats.domain_counts).length : 0
+
+  const hh = String(Math.floor(tick / 3600)).padStart(2, "0")
+  const mm = String(Math.floor((tick % 3600) / 60)).padStart(2, "0")
+  const ss = String(tick % 60).padStart(2, "0")
+
+  return (
+    <aside
+      className="relative flex h-screen w-56 flex-col font-mono overflow-hidden select-none"
+      style={{
+        background: "linear-gradient(180deg, #020817 0%, #000d1a 50%, #020817 100%)",
+        borderRight: "1px solid rgba(6,182,212,0.2)",
+      }}
+    >
+      {/* Animated right-edge glow */}
+      <div
+        className="pointer-events-none absolute right-0 top-0 h-full w-px"
+        style={{
+          background: "linear-gradient(180deg, transparent 0%, rgba(6,182,212,0.6) 25%, rgba(59,130,246,0.8) 60%, rgba(168,85,247,0.4) 85%, transparent 100%)",
+          boxShadow: "0 0 10px rgba(6,182,212,0.5)",
+        }}
+      />
+
+      {/* Top ambient glow */}
+      <div
+        className="pointer-events-none absolute top-0 left-0 w-full h-32"
+        style={{
+          background: "radial-gradient(ellipse at 30% 0%, rgba(6,182,212,0.12) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* Bottom ambient glow */}
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 w-full h-32"
+        style={{
+          background: "radial-gradient(ellipse at 30% 100%, rgba(59,130,246,0.1) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* Corner brackets */}
+      <div className="pointer-events-none absolute top-2 left-2 h-5 w-5 border-t-2 border-l-2 border-cyan-400/60"
+        style={{ filter: "drop-shadow(0 0 4px rgba(34,211,238,0.7))" }} />
+      <div className="pointer-events-none absolute bottom-2 left-2 h-5 w-5 border-b-2 border-l-2 border-cyan-400/60"
+        style={{ filter: "drop-shadow(0 0 4px rgba(34,211,238,0.7))" }} />
+      <div className="pointer-events-none absolute top-2 right-2 h-5 w-5 border-t-2 border-r-2 border-cyan-400/30"
+        style={{ filter: "drop-shadow(0 0 3px rgba(34,211,238,0.4))" }} />
+
+      {/* ── Logo ── */}
+      <div
+        className="relative px-5 pt-6 pb-4"
+        style={{ borderBottom: "1px solid rgba(6,182,212,0.12)" }}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          {/* Hexagon logo with spin ring */}
+          <div className="relative shrink-0 h-10 w-10 flex items-center justify-center">
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "conic-gradient(from 0deg, rgba(6,182,212,0.0), rgba(6,182,212,0.6), rgba(59,130,246,0.6), rgba(6,182,212,0.0))",
+                clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                animation: "spin 6s linear infinite",
+              }}
+            />
+            <div
+              className="absolute inset-[2px] flex items-center justify-center text-xs font-bold text-cyan-300"
+              style={{
+                background: "linear-gradient(135deg, rgba(2,8,23,0.9), rgba(0,20,40,0.95))",
+                clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                textShadow: "0 0 8px rgba(34,211,238,0.9)",
+              }}
+            >
+              LC
+            </div>
+          </div>
+
+          <div>
+            <div
+              className="text-[15px] font-bold tracking-wide text-cyan-300"
+              style={{ textShadow: "0 0 12px rgba(34,211,238,0.6)" }}
+            >
+              LocMemory
+            </div>
+            <div className="text-[8px] text-cyan-700/80 uppercase tracking-[0.25em]">
+              v0.1.0
+            </div>
+          </div>
+        </div>
+
+        {/* Status + uptime row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-green-400"
+              style={{ boxShadow: "0 0 6px rgba(74,222,128,0.9)", animation: "pulse 2s ease-in-out infinite" }}
+            />
+            <span className="text-[8px] uppercase tracking-[0.2em] text-green-400/80">ONLINE</span>
+          </div>
+          <span
+            className="text-[9px] tabular-nums text-cyan-700/60"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {hh}:{mm}:{ss}
+          </span>
+        </div>
       </div>
 
-      <nav className="flex-1 px-2 py-3 space-y-1">
-        {links.map(({ to, label, icon: Icon }) => (
+      {/* ── Nav ── */}
+      <nav className="px-3 py-4 space-y-1">
+        <div className="px-2 mb-3 flex items-center gap-2">
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(6,182,212,0.3), transparent)" }} />
+          <span className="text-[8px] uppercase tracking-[0.25em] text-cyan-700/60">NAV</span>
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(6,182,212,0.3), transparent)" }} />
+        </div>
+
+        {links.map(({ to, label, icon: Icon, id, desc }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-[11px] uppercase tracking-widest transition-all duration-200 overflow-hidden",
                 isActive
-                  ? "bg-accent text-accent-foreground font-medium"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  ? "text-cyan-300"
+                  : "text-neutral-500 hover:text-cyan-100"
               )
             }
+            style={({ isActive }) => isActive ? {
+              background: "linear-gradient(90deg, rgba(6,182,212,0.12) 0%, rgba(6,182,212,0.04) 100%)",
+              boxShadow: "inset 0 0 20px rgba(6,182,212,0.05)",
+            } : {}}
           >
-            <Icon className="h-4 w-4" />
-            {label}
+            {({ isActive }) => (
+              <>
+                {/* Hover bg */}
+                {!isActive && (
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    style={{ background: "linear-gradient(90deg, rgba(6,182,212,0.07), transparent)" }} />
+                )}
+
+                {/* Active left bar */}
+                <div
+                  className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all duration-300"
+                  style={{
+                    background: isActive ? "linear-gradient(180deg, transparent, #22d3ee, transparent)" : "transparent",
+                    boxShadow: isActive ? "0 0 8px rgba(34,211,238,0.8)" : "none",
+                    opacity: isActive ? 1 : 0,
+                  }}
+                />
+
+                {/* ID */}
+                <span className={cn("text-[8px] w-4 tabular-nums shrink-0", isActive ? "text-cyan-500/50" : "text-neutral-700 group-hover:text-neutral-600")}>
+                  {id}
+                </span>
+
+                {/* Icon */}
+                <Icon
+                  className="w-3.5 h-3.5 shrink-0 transition-all duration-200"
+                  style={isActive
+                    ? { filter: "drop-shadow(0 0 5px rgba(34,211,238,0.8))", color: "#22d3ee" }
+                    : {}}
+                />
+
+                {/* Label + desc */}
+                <div className="flex flex-col min-w-0">
+                  <span className="leading-none">{label}</span>
+                  {isActive && (
+                    <span className="text-[7px] text-cyan-600/60 normal-case tracking-wider mt-0.5 leading-none">
+                      {desc}
+                    </span>
+                  )}
+                </div>
+
+                {/* Active indicator */}
+                {isActive && (
+                  <span
+                    className="ml-auto h-1 w-1 rounded-full shrink-0 bg-cyan-400"
+                    style={{ boxShadow: "0 0 6px rgba(34,211,238,0.9)", animation: "pulse 2s ease-in-out infinite" }}
+                  />
+                )}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <div className="border-t border-border px-3 py-3 space-y-2">
-        <button
-          onClick={toggle}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {theme === "dark" ? "Light mode" : "Dark mode"}
-        </button>
-        <div className="px-3 text-xs text-muted-foreground space-y-0.5">
-          {stats ? (
-            <>
-              <div>{stats.nodes} nodes</div>
-              <div>{stats.edges} edges</div>
-            </>
-          ) : (
-            <div>loading…</div>
-          )}
+      {/* ── Neural activity waveform ── */}
+      <div className="flex-1 flex flex-col justify-center">
+        <NeuralPulse />
+      </div>
+
+      {/* ── Stats ── */}
+      <div
+        className="px-4 py-3"
+        style={{ borderTop: "1px solid rgba(6,182,212,0.1)" }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(6,182,212,0.3), transparent)" }} />
+          <span className="text-[8px] uppercase tracking-[0.25em] text-cyan-700/60">METRICS</span>
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(6,182,212,0.3), transparent)" }} />
+        </div>
+
+        <div className="space-y-1.5">
+          {[
+            { label: "NODES",   value: stats?.nodes,  flash: flashing.nodes,   color: "#3b82f6" },
+            { label: "EDGES",   value: stats?.edges,  flash: flashing.edges,   color: "#06b6d4" },
+            { label: "DOMAINS", value: domainCount || null, flash: flashing.domains, color: "#a855f7" },
+          ].map(({ label, value, flash, color }) => (
+            <div
+              key={label}
+              className={cn(
+                "relative flex items-center justify-between px-2 py-1.5 rounded-sm transition-all duration-300",
+                flash && "bg-cyan-400/8"
+              )}
+              style={{ background: flash ? `rgba(6,182,212,0.06)` : undefined }}
+            >
+              {/* color accent */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded-full"
+                style={{ background: color, boxShadow: `0 0 4px ${color}` }} />
+              <span className="pl-2 text-[9px] uppercase tracking-wider text-neutral-600">{label}</span>
+              <span
+                className="text-[12px] font-semibold tabular-nums"
+                style={{
+                  color: flash ? "#22d3ee" : color,
+                  textShadow: flash ? `0 0 10px rgba(34,211,238,0.9)` : `0 0 6px ${color}60`,
+                }}
+              >
+                {value != null
+                  ? typeof value === "number"
+                    ? <AnimatedNumber value={value} duration={500} />
+                    : value
+                  : <span className="text-neutral-700 text-[10px]">—</span>}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
+
+      {/* ── Footer ── */}
+      <div
+        className="px-5 py-2.5 flex items-center justify-between"
+        style={{ borderTop: "1px solid rgba(6,182,212,0.08)" }}
+      >
+        <span className="text-[8px] uppercase tracking-[0.2em] text-neutral-700">
+          BUILD 2025.04
+        </span>
+        <div className="flex gap-1">
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              className="h-1 w-1 rounded-full bg-cyan-900"
+              style={{
+                animation: `pulse ${1.2 + i * 0.3}s ease-in-out infinite`,
+                animationDelay: `${i * 0.2}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
     </aside>
   )
 }

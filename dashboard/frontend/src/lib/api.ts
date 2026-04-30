@@ -2,7 +2,7 @@ const BASE = "/api"
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
-  return r.json()
+  return r.json() as Promise<T>
 }
 
 export interface Memory {
@@ -73,9 +73,9 @@ export interface RetrieveResponse {
 }
 
 export const api = {
-  stats: (): Promise<Stats> => fetch(`${BASE}/stats`).then(j),
+  stats: (): Promise<Stats> => fetch(`${BASE}/stats`).then((r) => j<Stats>(r)),
   graph: (): Promise<{ nodes: GraphNode[]; links: GraphLink[] }> =>
-    fetch(`${BASE}/graph`).then(j),
+    fetch(`${BASE}/graph`).then((r) => j(r)),
   memories: (params?: { domain?: string; subdomain?: string; tier?: number; q?: string }): Promise<Memory[]> => {
     const qs = new URLSearchParams()
     if (params?.domain) qs.set("domain", params.domain)
@@ -83,29 +83,29 @@ export const api = {
     if (params?.tier !== undefined) qs.set("tier", String(params.tier))
     if (params?.q) qs.set("q", params.q)
     const suffix = qs.toString() ? `?${qs}` : ""
-    return fetch(`${BASE}/memories${suffix}`).then(j)
+    return fetch(`${BASE}/memories${suffix}`).then((r) => j(r))
   },
-  memory: (id: string): Promise<MemoryDetail> => fetch(`${BASE}/memories/${id}`).then(j),
+  memory: (id: string): Promise<MemoryDetail> => fetch(`${BASE}/memories/${id}`).then((r) => j(r)),
   updateMemory: (id: string, text: string): Promise<Memory> =>
     fetch(`${BASE}/memories/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
-    }).then(j),
+    }).then((r) => j(r)),
   deleteMemory: (id: string): Promise<{ deleted: string }> =>
-    fetch(`${BASE}/memories/${id}`, { method: "DELETE" }).then(j),
-  domains: (): Promise<Domain[]> => fetch(`${BASE}/domains`).then(j),
+    fetch(`${BASE}/memories/${id}`, { method: "DELETE" }).then((r) => j(r)),
+  domains: (): Promise<Domain[]> => fetch(`${BASE}/domains`).then((r) => j(r)),
   retrieve: (query: string, limit = 10): Promise<RetrieveResponse> =>
     fetch(`${BASE}/retrieve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, limit }),
-    }).then(j),
-  config: (): Promise<Record<string, any>> => fetch(`${BASE}/config`).then(j),
+    }).then((r) => j(r)),
+  config: (): Promise<Record<string, any>> => fetch(`${BASE}/config`).then((r) => j(r)),
   updateConfig: (data: Record<string, any>): Promise<{ ok: boolean; data: Record<string, any> }> =>
     fetch(`${BASE}/config`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data }),
-    }).then(j),
+    }).then((r) => j(r)),
 }
