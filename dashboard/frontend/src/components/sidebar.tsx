@@ -184,26 +184,13 @@ export function Sidebar() {
         style={{ borderBottom: "1px solid rgba(0, 196, 188,0.12)" }}
       >
         <div className="flex items-center gap-3 mb-3">
-          {/* Hexagon logo with spin ring */}
           <div className="relative shrink-0 h-10 w-10 flex items-center justify-center">
-            <div
-              className="absolute inset-0"
-              style={{
-                background: "conic-gradient(from 0deg, rgba(0, 196, 188,0.0), rgba(0, 196, 188,0.6), rgba(59, 200, 215,0.6), rgba(0, 196, 188,0.0))",
-                clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                animation: "spin 6s linear infinite",
-              }}
+            <img
+              src="/logo.png"
+              alt="LocMemory logo"
+              className="h-10 w-10 object-contain"
+              style={{ filter: "drop-shadow(0 0 6px rgba(0, 196, 188, 0.6))", mixBlendMode: "screen" }}
             />
-            <div
-              className="absolute inset-[2px] flex items-center justify-center text-xs font-bold text-emerald-300"
-              style={{
-                background: "linear-gradient(135deg, rgba(2,8,23,0.9), rgba(0,20,40,0.95))",
-                clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                textShadow: "0 0 8px rgba(0, 196, 188,0.9)",
-              }}
-            >
-              LC
-            </div>
           </div>
 
           <div>
@@ -389,12 +376,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
     </aside>
   )
 }
