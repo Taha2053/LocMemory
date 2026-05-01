@@ -67,15 +67,15 @@
   }
 
   .bg-cyan-glow {
-    background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
+    background: radial-gradient(ellipse at center, rgba(0, 255, 136, 0.15) 0%, transparent 70%);
   }
 
   .bg-glass-gradient {
     background: linear-gradient(
       135deg,
-      rgba(34, 211, 238, 0.03) 0%,
-      rgba(59, 130, 246, 0.02) 50%,
-      rgba(168, 85, 247, 0.02) 100%
+      rgba(0, 255, 136, 0.04) 0%,
+      rgba(0, 200, 100, 0.02) 50%,
+      rgba(0, 160, 80, 0.02) 100%
     );
   }
 
@@ -89,21 +89,29 @@
 
   .shadow-hud-glow {
     box-shadow:
-      0 0 30px rgba(59, 130, 246, 0.25),
-      0 0 60px rgba(34, 211, 238, 0.1),
-      inset 0 0 20px rgba(6, 182, 212, 0.05);
+      0 0 30px rgba(0, 200, 100, 0.25),
+      0 0 60px rgba(0, 255, 136, 0.1),
+      inset 0 0 20px rgba(0, 180, 90, 0.05);
   }
 
   .text-hud-label {
-    text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
   }
 
   .border-cyan-400\/20 {
-    border-color: rgba(34, 211, 238, 0.2);
+    border-color: rgba(0, 255, 136, 0.2);
   }
 
   .ring-cyan-500\/10 {
-    --tw-ring-color: rgba(34, 211, 238, 0.1);
+    --tw-ring-color: rgba(0, 255, 136, 0.1);
+  }
+
+  .glass-card {
+    background: rgba(0, 20, 10, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 255, 136, 0.15);
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(0, 255, 136, 0.2), 0 0 20px rgba(0, 255, 136, 0.08);
   }
 }
 
@@ -323,9 +331,9 @@
 
 /* 15. REINIT BUTTON HOVER GLOW */
 .reinit-button:hover {
-  border-color: rgba(34,211,238,0.8);
-  color: rgba(34,211,238,0.9);
-  box-shadow: 0 0 15px rgba(34,211,238,0.3);
+  border-color: rgba(0,255,136,0.8);
+  color: rgba(0,255,136,0.9);
+  box-shadow: 0 0 15px rgba(0,255,136,0.3);
 }
 
 /* 16. SCANLINE INPUT — input field scan sweep during search */
@@ -338,7 +346,7 @@
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(34,211,238,0.05) 50%,
+    rgba(0,255,136,0.05) 50%,
     transparent 100%
   );
   background-size: 100% 200%;
@@ -347,9 +355,9 @@
 
 /* 17. SCAN BUTTON HOVER */
 .scan-button:hover:not(:disabled) {
-  border-color: rgba(34,211,238,0.8);
-  color: rgba(34,211,238,0.9);
-  box-shadow: 0 0 10px rgba(34,211,238,0.2);
+  border-color: rgba(0,255,136,0.8);
+  color: rgba(0,255,136,0.9);
+  box-shadow: 0 0 10px rgba(0,255,136,0.2);
 }
 
 .scan-button:disabled {

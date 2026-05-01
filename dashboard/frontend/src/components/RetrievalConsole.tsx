@@ -1,8 +1,8 @@
-import { useState } from "react"
+﻿import { useState } from "react"
 import { api, type RetrievedResult } from "@/lib/api"
 import { HudPanel } from "@/components/hud"
 
-const TIER_COLORS = ["#3b82f6", "#06b6d4", "#9ec5e8", "#a855f7"]
+const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"]
 
 interface Props {
   onSelect: (id: string) => void
@@ -42,24 +42,24 @@ export function RetrievalConsole({ onSelect }: Props) {
             Retrieval Console
           </div>
           {queryDomain && (
-            <div className="text-[10px] text-cyan-400/80 uppercase tracking-wider">
+            <div className="text-[10px] text-emerald-400/80 uppercase tracking-wider">
               domain: {queryDomain}
             </div>
           )}
         </div>
 
         <form onSubmit={submit} className="flex items-center gap-2">
-          <span className="text-cyan-400/60 text-[12px] font-mono">{">"}</span>
+          <span className="text-emerald-400/60 text-[12px] font-mono">{">"}</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="query the cognitive graph..."
-            className={`flex-1 bg-transparent border-b border-cyan-400/20 focus:border-cyan-400/60 outline-none text-[13px] text-neutral-100 py-1.5 placeholder:text-neutral-600 font-mono ${loading ? "scanline-input" : ""}`}
+            className={`flex-1 bg-transparent border-b border-emerald-400/20 focus:border-emerald-400/60 outline-none text-[13px] text-neutral-100 py-1.5 placeholder:text-neutral-600 font-mono ${loading ? "scanline-input" : ""}`}
           />
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="scan-button border border-cyan-400/40 px-3 py-1 text-[10px] text-cyan-400/70 uppercase tracking-wider transition-all"
+            className="scan-button border border-emerald-400/40 px-3 py-1 text-[10px] text-emerald-400/70 uppercase tracking-wider transition-all"
           >
             {loading ? "scanning..." : "[ scan ]"}
           </button>
@@ -84,7 +84,7 @@ export function RetrievalConsole({ onSelect }: Props) {
               <button
                 key={r.node_id}
                 onClick={() => onSelect(r.node_id)}
-                className="log-entry w-full text-left p-2 border border-cyan-400/10 hover:border-cyan-400/40 hover:bg-cyan-400/5 transition group"
+                className="log-entry w-full text-left p-2 border border-emerald-400/10 hover:border-emerald-400/40 hover:bg-emerald-400/5 transition group"
                 style={{ animationDelay: `${i * 0.04}s` }}
               >
                 <div className="flex items-start gap-2 mb-1.5">
@@ -100,7 +100,7 @@ export function RetrievalConsole({ onSelect }: Props) {
                     <div className="mt-1 flex items-center gap-3 text-[9px] text-neutral-500 uppercase tracking-wider">
                       <span>{r.domain}/{r.subdomain}</span>
                       <span>depth {r.depth}</span>
-                      <span className="text-cyan-400/80 tabular-nums">score {r.score.toFixed(3)}</span>
+                      <span className="text-emerald-400/80 tabular-nums">score {r.score.toFixed(3)}</span>
                     </div>
                   </div>
                 </div>
@@ -130,14 +130,14 @@ function ScoreBar({ cosine, recency, category }: { cosine: number; recency: numb
   return (
     <div>
       <div className="flex h-1 w-full overflow-hidden rounded-sm bg-neutral-800/60">
-        <div style={{ width: `${c}%`, background: "#06b6d4" }} title={`semantic ${c.toFixed(0)}%`} />
-        <div style={{ width: `${r}%`, background: "#a855f7" }} title={`recency ${r.toFixed(0)}%`} />
-        <div style={{ width: `${k}%`, background: "#3b82f6" }} title={`category ${k.toFixed(0)}%`} />
+        <div style={{ width: `${c}%`, background: "#00ff88" }} title={`semantic ${c.toFixed(0)}%`} />
+        <div style={{ width: `${r}%`, background: "#ff8c26" }} title={`recency ${r.toFixed(0)}%`} />
+        <div style={{ width: `${k}%`, background: "#ffd700" }} title={`category ${k.toFixed(0)}%`} />
       </div>
       <div className="mt-1 flex gap-3 text-[8px] text-neutral-500 uppercase tracking-wider">
-        <span><span className="text-cyan-400/70">●</span> sem {c.toFixed(0)}%</span>
-        <span><span className="text-purple-400/70">●</span> rec {r.toFixed(0)}%</span>
-        <span><span className="text-blue-400/70">●</span> cat {k.toFixed(0)}%</span>
+        <span><span style={{ color: "#00ff88" }}>●</span> sem {c.toFixed(0)}%</span>
+        <span><span style={{ color: "#ff8c26" }}>●</span> rec {r.toFixed(0)}%</span>
+        <span><span style={{ color: "#ffd700" }}>●</span> cat {k.toFixed(0)}%</span>
       </div>
     </div>
   )

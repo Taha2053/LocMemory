@@ -4,21 +4,21 @@ import React, { useEffect, useRef } from "react"
 const CHARS =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$&+=<>~!?".split("")
 
-// ── Color palettes — blue/purple/mauve/cyan only ──
+// ── Color palettes — bioluminescent green theme ──
 const PALETTES = {
-  purple: { base: 265, range: 25, sat: [55, 80], light: [35, 85] },
-  mauve:  { base: 280, range: 20, sat: [45, 75], light: [38, 78] },
-  cyan:   { base: 195, range: 20, sat: [60, 90], light: [40, 80] },
-  blue:   { base: 225, range: 22, sat: [60, 85], light: [38, 82] },
+  emerald:  { base: 150, range: 20, sat: [60, 90], light: [35, 80] },
+  forest:   { base: 140, range: 15, sat: [50, 75], light: [28, 72] },
+  lime:     { base: 165, range: 18, sat: [55, 85], light: [38, 78] },
+  bio:      { base: 155, range: 25, sat: [65, 95], light: [40, 85] },
 }
 type PaletteKey = keyof typeof PALETTES
 
 function pickPalette(): PaletteKey {
   const r = Math.random()
-  if (r < 0.38) return "purple"
-  if (r < 0.60) return "mauve"
-  if (r < 0.80) return "blue"
-  return "cyan"
+  if (r < 0.38) return "emerald"
+  if (r < 0.60) return "forest"
+  if (r < 0.80) return "lime"
+  return "bio"
 }
 
 // ── Stream class ──
@@ -70,7 +70,7 @@ function createStream(
     layer,
     chars: [],
     maxTrail: Math.floor(trailBase * (0.6 + depth * 0.6)),
-    palette: isFlash ? "cyan" : pickPalette(),
+    palette: isFlash ? "bio" : pickPalette(),
     hueOffset: (Math.random() - 0.5) * 40,
     charChangeRate: 0.05 + Math.random() * 0.08,
     isFlash,

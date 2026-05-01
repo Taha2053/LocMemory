@@ -3,16 +3,14 @@ import {
   Scene,
   WebGLRenderer,
   PerspectiveCamera,
-  BoxGeometry,
-  ShaderMaterial,
   Color,
   Vector2,
   Vector3,
   Raycaster,
   Object3D,
   MathUtils,
-  LoadingManager,
   Mesh,
+  BoxGeometry,
   BufferGeometry,
   InstancedMesh,
   MeshBasicMaterial,
@@ -20,78 +18,23 @@ import {
   LineSegments,
   LineBasicMaterial,
   Float32BufferAttribute,
+  WireframeGeometry,
+  Points,
+  PointsMaterial,
 } from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
-import { InstancedUniformsMesh } from "three-instanced-uniforms-mesh"
 import gsap from "gsap"
 import { api } from "@/lib/api"
 
-const VERTEX_SHADER = /* glsl */ `
-  uniform vec3 uPointer;
-  uniform vec3 uColor;
-  uniform float uRotation;
-  uniform float uSize;
-  uniform float uHover;
-  uniform float uSizeMul;
-
-  varying vec3 vColor;
-
-  #define PI 3.14159265359
-
-  mat2 rotate(float angle) {
-    float s = sin(angle);
-    float c = cos(angle);
-    return mat2(c, -s, s, c);
-  }
-
-  void main() {
-    vec4 mvPosition = vec4(position, 1.0);
-    mvPosition = instanceMatrix * mvPosition;
-
-    float d = distance(uPointer, mvPosition.xyz);
-    float c = smoothstep(0.45, 0.1, d);
-
-    float scale = (uSize + c * 8.0 * uHover) * uSizeMul;
-    vec3 pos = position;
-    pos *= scale;
-    pos.xz *= rotate(PI * c * uRotation + PI * uRotation * 0.43);
-    pos.xy *= rotate(PI * c * uRotation + PI * uRotation * 0.71);
-
-    mvPosition = instanceMatrix * vec4(pos, 1.0);
-    gl_Position = projectionMatrix * modelViewMatrix * mvPosition;
-
-    vColor = uColor;
-  }
-`
-
-const FRAGMENT_SHADER = /* glsl */ `
-  uniform float uDim;
-  varying vec3 vColor;
-  void main() {
-    // brighten brain voxels — clamp to 1.0, then dim when a memory is focused
-    gl_FragColor = vec4(min(vColor * 1.25, vec3(1.0)) * uDim, 1.0);
-  }
-`
-
-// LocMemory tier palette — used for memory markers + edges
+// Data-viz tier palette — green / orange / amber / rose
 const TIER_PALETTE = [
-  new Color(0x3b82f6), // Core Context — electric blue
-  new Color(0x06b6d4), // Anchor Memories — cyan
-  new Color(0x9ec5e8), // Leaf Memories — soft white-blue
-  new Color(0xa855f7), // Procedural Memories — purple
+  new Color(0x00ff88), // Core Context — bright emerald
+  new Color(0xff8c26), // Anchor Memories — warm orange
+  new Color(0xffd700), // Leaf Memories — amber gold
+  new Color(0xff4d6d), // Procedural — rose red
 ]
 
-// Lighter pastel palette — used only for the brain voxels so the brain reads brighter
-const BRAIN_PALETTE = [
-  new Color(0x9ec5e8),
-  new Color(0x7dd3fc),
-  new Color(0xc4b5fd),
-  new Color(0xddd6fe),
-  new Color(0xe0f2fe),
-]
-
-// Stable string hash so a node id always maps to the same brain vertex
 function hashId(str: string): number {
   let h = 0xdeadbeef
   for (let i = 0; i < str.length; i++) {
@@ -102,8 +45,8 @@ function hashId(str: string): number {
 
 const MARKER_BASE_SCALE = 1.0
 const ZOOM_DISTANCE = 0.35
-const DEFAULT_CAM_Z = 1.2
-const DEFAULT_CAM_Z_MOBILE = 2.3
+const DEFAULT_CAM_Z = 1.9
+const DEFAULT_CAM_Z_MOBILE = 2.9
 
 interface BrainSceneProps extends React.HTMLAttributes<HTMLDivElement> {
   modelUrl?: string
@@ -153,29 +96,25 @@ export function BrainScene({
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio))
     container.appendChild(renderer.domElement)
 
-    // ── Orbit controls — free rotation up/down/left/right + zoom ──
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.enablePan = false
-    controls.minDistance = 0.4
-    controls.maxDistance = 4
+    controls.minDistance = 0.6
+    controls.maxDistance = 5
     controls.rotateSpeed = 0.6
     controls.zoomSpeed = 0.7
     controls.target.set(0, 0, 0)
 
     const raycaster = new Raycaster()
-    const mouse = new Vector2()
-    const point = new Vector3()
-    const uniforms = { uHover: 0 }
-    let hover = false
-    let brainMesh: Mesh | null = null
-    let instancedMesh: InstancedUniformsMesh | null = null
-    let brainMaterial: ShaderMaterial | null = null
     let frameId = 0
     let disposed = false
 
-    // ── memory-overlay state ───────────────────────────
+    // Brain visual refs
+    let brainWireframe: LineSegments | null = null
+    let brainDots: Points | null = null
+
+    // Memory overlay state
     let markersMesh: InstancedMesh | null = null
     let haloMesh: InstancedMesh | null = null
     let edgesLine: LineSegments | null = null
@@ -185,19 +124,6 @@ export function BrainScene({
     const nodeTiers: number[] = []
     let hoveredIdx = -1
     let prevHoveredIdx = -1
-
-    const animateHoverUniform = (value: number) => {
-      gsap.to(uniforms, {
-        uHover: value,
-        duration: 0.25,
-        onUpdate: () => {
-          if (!instancedMesh) return
-          for (let i = 0; i < instancedMesh.count; i++) {
-            instancedMesh.setUniformAt("uHover", i, uniforms.uHover)
-          }
-        },
-      })
-    }
 
     const tmpObj = new Object3D()
 
@@ -217,13 +143,11 @@ export function BrainScene({
       haloMesh.setMatrixAt(idx, tmpObj.matrix)
     }
 
-    // ── selection-driven zoom + static highlight (no per-frame vibration) ──
     let prevSelectedIdx = -1
     const applySelection = (id: string | null) => {
       const newIdx = id ? nodeIndexById.get(id) ?? -1 : -1
 
       if (markersMesh && haloMesh) {
-        // restore previous
         if (prevSelectedIdx >= 0 && prevSelectedIdx !== newIdx) {
           setMarkerMatrix(prevSelectedIdx, MARKER_BASE_SCALE)
           setHaloMatrix(prevSelectedIdx, 1.0)
@@ -233,7 +157,6 @@ export function BrainScene({
 
         if (newIdx >= 0) {
           const tIdx = Math.max(0, Math.min(3, nodeTiers[newIdx] - 1))
-          // brighter color, larger halo, larger marker — all static
           markersMesh.setColorAt(
             newIdx,
             TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.5),
@@ -249,16 +172,18 @@ export function BrainScene({
         prevSelectedIdx = newIdx
       }
 
-      // brain fade + shrink so the selected memory becomes the focal point
+      // Dim brain when a memory is focused
       const focused = newIdx >= 0
-      if (brainMaterial) {
-        gsap.to(brainMaterial.uniforms.uDim, {
-          value: focused ? 0.18 : 1.0,
+      if (brainWireframe) {
+        gsap.to(brainWireframe.material as LineBasicMaterial, {
+          opacity: focused ? 0.06 : 0.2,
           duration: 0.7,
           ease: "power2.out",
         })
-        gsap.to(brainMaterial.uniforms.uSizeMul, {
-          value: focused ? 0.4 : 1.0,
+      }
+      if (brainDots) {
+        gsap.to(brainDots.material as PointsMaterial, {
+          opacity: focused ? 0.15 : 0.85,
           duration: 0.7,
           ease: "power2.out",
         })
@@ -271,7 +196,7 @@ export function BrainScene({
         })
       }
 
-      // camera fly
+      // Camera fly
       gsap.killTweensOf(camera.position)
       gsap.killTweensOf(controls.target)
       if (newIdx >= 0) {
@@ -303,51 +228,25 @@ export function BrainScene({
     zoomFnRef.current = applySelection
 
     const onMousemove = (e: MouseEvent) => {
-      if (!brainMesh) return
+      if (!markersMesh) return
       const rect = container.getBoundingClientRect()
       const x = ((e.clientX - rect.left) / size.width) * 2 - 1
       const y = -((e.clientY - rect.top) / size.height) * 2 + 1
-      mouse.set(x, y)
+      raycaster.setFromCamera(new Vector2(x, y), camera)
 
-      raycaster.setFromCamera(mouse, camera)
-
-      // Marker picking
-      if (markersMesh) {
-        const markerHits = raycaster.intersectObject(markersMesh, false)
-        if (markerHits.length > 0 && markerHits[0].instanceId !== undefined) {
-          hoveredIdx = markerHits[0].instanceId
-          container.style.cursor = "pointer"
-        } else {
-          hoveredIdx = -1
-          container.style.cursor = ""
-        }
-      }
-
-      const intersects = raycaster.intersectObject(brainMesh)
-      if (intersects.length === 0) {
-        if (hover) { hover = false; animateHoverUniform(0) }
+      const markerHits = raycaster.intersectObject(markersMesh, false)
+      if (markerHits.length > 0 && markerHits[0].instanceId !== undefined) {
+        hoveredIdx = markerHits[0].instanceId
+        container.style.cursor = "pointer"
       } else {
-        if (!hover) { hover = true; animateHoverUniform(1) }
-        gsap.to(point, {
-          x: intersects[0].point.x,
-          y: intersects[0].point.y,
-          z: intersects[0].point.z,
-          overwrite: true,
-          duration: 0.3,
-          onUpdate: () => {
-            if (!instancedMesh) return
-            for (let i = 0; i < instancedMesh.count; i++) {
-              instancedMesh.setUniformAt("uPointer", i, point)
-            }
-          },
-        })
+        hoveredIdx = -1
+        container.style.cursor = ""
       }
     }
 
     let downX = 0, downY = 0
     const onPointerDown = (e: PointerEvent) => { downX = e.clientX; downY = e.clientY }
     const onClick = (e: MouseEvent) => {
-      // only treat as click if pointer barely moved (avoid firing during orbit drag)
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return
       if (!markersMesh) return
       const rect = container.getBoundingClientRect()
@@ -373,7 +272,11 @@ export function BrainScene({
       if (disposed) return
       controls.update()
 
-      // hover scale on markers (only when not the selected one)
+      // Slow Y rotation
+      if (brainWireframe) brainWireframe.rotation.y += 0.0008
+      if (brainDots) brainDots.rotation.y += 0.0008
+
+      // Hover scale on markers
       if (markersMesh && nodeIds.length > 0 && hoveredIdx !== prevHoveredIdx) {
         if (prevHoveredIdx >= 0 && prevHoveredIdx !== prevSelectedIdx) {
           setMarkerMatrix(prevHoveredIdx, MARKER_BASE_SCALE)
@@ -389,155 +292,167 @@ export function BrainScene({
       frameId = requestAnimationFrame(animate)
     }
 
-    const loadingManager = new LoadingManager()
-    const loader = new GLTFLoader(loadingManager)
+    const loader = new GLTFLoader()
 
     loader.load(modelUrl, (gltf) => {
       if (disposed) return
-      brainMesh = gltf.scene.children[0] as Mesh
+      const brainMesh = gltf.scene.children[0] as Mesh
 
-      const geometry = new BoxGeometry(0.004, 0.004, 0.004, 1, 1, 1)
-      const material = new ShaderMaterial({
-        vertexShader: VERTEX_SHADER,
-        fragmentShader: FRAGMENT_SHADER,
-        wireframe: true,
-        uniforms: {
-          uPointer: { value: new Vector3() },
-          uColor: { value: new Color() },
-          uRotation: { value: 0 },
-          uSize: { value: 0 },
-          uHover: { value: uniforms.uHover },
-          uDim: { value: 1.0 },
-          uSizeMul: { value: 1.0 },
-        },
+      // ── Wireframe brain mesh ──
+      const wireGeo = new WireframeGeometry(brainMesh.geometry)
+      const wireMat = new LineBasicMaterial({
+        color: new Color(0x00ff88),
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
       })
-      brainMaterial = material
+      brainWireframe = new LineSegments(wireGeo, wireMat)
+      scene.add(brainWireframe)
 
-      if (brainMesh.geometry instanceof BufferGeometry) {
-        const count = brainMesh.geometry.attributes.position.count
-        instancedMesh = new InstancedUniformsMesh(geometry, material, count)
-        scene.add(instancedMesh)
+      // ── Glowing node dots at each vertex ──
+      const dotsGeo = new BufferGeometry()
+      dotsGeo.setAttribute("position", brainMesh.geometry.getAttribute("position").clone())
+      const dotsMat = new PointsMaterial({
+        color: new Color(0x00ff88),
+        size: 0.012,
+        transparent: true,
+        opacity: 0.85,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true,
+      })
+      brainDots = new Points(dotsGeo, dotsMat)
+      scene.add(brainDots)
 
-        const dummy = new Object3D()
-        const positions = brainMesh.geometry.attributes.position.array
-        for (let i = 0; i < positions.length; i += 3) {
-          const idx = i / 3
-          dummy.position.set(positions[i], positions[i + 1], positions[i + 2])
-          dummy.updateMatrix()
-          instancedMesh.setMatrixAt(idx, dummy.matrix)
-          instancedMesh.setUniformAt("uRotation", idx, MathUtils.randFloat(-1, 1))
-          instancedMesh.setUniformAt("uSize", idx, MathUtils.randFloat(0.3, 3))
-          const colorIndex = MathUtils.randInt(0, BRAIN_PALETTE.length - 1)
-          instancedMesh.setUniformAt("uColor", idx, BRAIN_PALETTE[colorIndex])
-        }
-
-        // ── load real memories overlaid on the brain ────────────
-        api
-          .graph()
-          .then(({ nodes, links }) => {
-            if (disposed || !brainMesh || nodes.length === 0) return
-            const positionsArr = (brainMesh.geometry as BufferGeometry)
-              .attributes.position.array
-            const positionCount = positionsArr.length / 3
-
-            nodeIds = nodes.map((n) => n.id)
-            nodes.forEach((n, i) => {
-              nodeIndexById.set(n.id, i)
-              nodeTiers.push(n.tier)
-              const vIdx = hashId(n.id) % positionCount
-              nodePositions.push(
-                new Vector3(
-                  positionsArr[vIdx * 3],
-                  positionsArr[vIdx * 3 + 1],
-                  positionsArr[vIdx * 3 + 2],
-                ),
-              )
-            })
-
-            // Memory markers — bigger, luminous wireframe cubes
-            const markerGeom = new BoxGeometry(0.045, 0.045, 0.045, 1, 1, 1)
-            const markerMat = new MeshBasicMaterial({
-              wireframe: true,
-              transparent: true,
-              opacity: 1.0,
-              blending: AdditiveBlending,
-              depthWrite: false,
-              toneMapped: false,
-            })
-            markersMesh = new InstancedMesh(markerGeom, markerMat, nodes.length)
-            markersMesh.renderOrder = 2
-
-            for (let i = 0; i < nodes.length; i++) {
-              setMarkerMatrix(i, MARKER_BASE_SCALE)
-              const tierIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
-              markersMesh.setColorAt(i, TIER_PALETTE[tierIdx])
-            }
-            markersMesh.instanceMatrix.needsUpdate = true
-            if (markersMesh.instanceColor) markersMesh.instanceColor.needsUpdate = true
-            scene.add(markersMesh)
-
-            // Halo around each memory — soft glow zone
-            const haloGeom = new BoxGeometry(0.085, 0.085, 0.085, 1, 1, 1)
-            const haloMat = new MeshBasicMaterial({
-              wireframe: true,
-              transparent: true,
-              opacity: 0.4,
-              blending: AdditiveBlending,
-              depthWrite: false,
-              toneMapped: false,
-            })
-            haloMesh = new InstancedMesh(haloGeom, haloMat, nodes.length)
-            haloMesh.renderOrder = 1.5
-
-            for (let i = 0; i < nodes.length; i++) {
-              setHaloMatrix(i, 1.0)
-              const tIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
-              const halo = TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.4)
-              haloMesh.setColorAt(i, halo)
-            }
-            haloMesh.instanceMatrix.needsUpdate = true
-            if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
-            scene.add(haloMesh)
-
-            // re-apply current selection now that meshes exist
-            if (selectedRef.current) applySelection(selectedRef.current)
-
-            // Edges
-            if (showEdges && links.length > 0) {
-              const verts: number[] = []
-              const cols: number[] = []
-              for (const l of links) {
-                const sId = typeof l.source === "string" ? l.source : (l.source as any).id
-                const tId = typeof l.target === "string" ? l.target : (l.target as any).id
-                const si = nodeIndexById.get(sId)
-                const ti = nodeIndexById.get(tId)
-                if (si === undefined || ti === undefined) continue
-                const sp = nodePositions[si]
-                const tp = nodePositions[ti]
-                verts.push(sp.x, sp.y, sp.z, tp.x, tp.y, tp.z)
-                const sc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[si].tier - 1))]
-                const tc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[ti].tier - 1))]
-                const a = MathUtils.clamp(l.weight ?? 0.3, 0.1, 0.6)
-                cols.push(sc.r * a, sc.g * a, sc.b * a, tc.r * a, tc.g * a, tc.b * a)
-              }
-              if (verts.length > 0) {
-                const eg = new BufferGeometry()
-                eg.setAttribute("position", new Float32BufferAttribute(verts, 3))
-                eg.setAttribute("color", new Float32BufferAttribute(cols, 3))
-                const em = new LineBasicMaterial({
-                  vertexColors: true,
-                  transparent: true,
-                  opacity: 0.5,
-                  depthWrite: false,
-                })
-                edgesLine = new LineSegments(eg, em)
-                edgesLine.renderOrder = 1
-                scene.add(edgesLine)
-              }
-            }
-          })
-          .catch(() => {})
+      // ── Star field background ──
+      const starVerts: number[] = []
+      for (let i = 0; i < 350; i++) {
+        const theta = Math.random() * Math.PI * 2
+        const phi = Math.acos(2 * Math.random() - 1)
+        const r = 5 + Math.random() * 4
+        starVerts.push(
+          r * Math.sin(phi) * Math.cos(theta),
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi),
+        )
       }
+      const starGeo = new BufferGeometry()
+      starGeo.setAttribute("position", new Float32BufferAttribute(starVerts, 3))
+      const starMat = new PointsMaterial({
+        color: 0xffffff,
+        size: 0.02,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+        sizeAttenuation: true,
+      })
+      const stars = new Points(starGeo, starMat)
+      scene.add(stars)
+
+      // ── Load real memories overlaid on the brain ──
+      api
+        .graph()
+        .then(({ nodes, links }) => {
+          if (disposed || nodes.length === 0) return
+          const positionsArr = brainMesh.geometry.attributes.position.array
+          const positionCount = positionsArr.length / 3
+
+          nodeIds = nodes.map((n) => n.id)
+          nodes.forEach((n, i) => {
+            nodeIndexById.set(n.id, i)
+            nodeTiers.push(n.tier)
+            const vIdx = hashId(n.id) % positionCount
+            nodePositions.push(
+              new Vector3(
+                positionsArr[vIdx * 3],
+                positionsArr[vIdx * 3 + 1],
+                positionsArr[vIdx * 3 + 2],
+              ),
+            )
+          })
+
+          // Memory markers — wireframe cubes
+          const markerGeom = new WireframeGeometry(new BoxGeometry(0.045, 0.045, 0.045))
+          const markerMat = new MeshBasicMaterial({
+            wireframe: true,
+            transparent: true,
+            opacity: 1.0,
+            blending: AdditiveBlending,
+            depthWrite: false,
+            toneMapped: false,
+          })
+          markersMesh = new InstancedMesh(markerGeom, markerMat, nodes.length)
+          markersMesh.renderOrder = 2
+
+          for (let i = 0; i < nodes.length; i++) {
+            setMarkerMatrix(i, MARKER_BASE_SCALE)
+            const tierIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
+            markersMesh.setColorAt(i, TIER_PALETTE[tierIdx])
+          }
+          markersMesh.instanceMatrix.needsUpdate = true
+          if (markersMesh.instanceColor) markersMesh.instanceColor.needsUpdate = true
+          scene.add(markersMesh)
+
+          // Halos — soft glow zones
+          const haloGeom = new WireframeGeometry(new BoxGeometry(0.085, 0.085, 0.085))
+          const haloMat = new MeshBasicMaterial({
+            wireframe: true,
+            transparent: true,
+            opacity: 0.4,
+            blending: AdditiveBlending,
+            depthWrite: false,
+            toneMapped: false,
+          })
+          haloMesh = new InstancedMesh(haloGeom, haloMat, nodes.length)
+          haloMesh.renderOrder = 1.5
+
+          for (let i = 0; i < nodes.length; i++) {
+            setHaloMatrix(i, 1.0)
+            const tIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
+            const halo = TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.4)
+            haloMesh.setColorAt(i, halo)
+          }
+          haloMesh.instanceMatrix.needsUpdate = true
+          if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
+          scene.add(haloMesh)
+
+          if (selectedRef.current) applySelection(selectedRef.current)
+
+          // Edges between memories
+          if (showEdges && links.length > 0) {
+            const verts: number[] = []
+            const cols: number[] = []
+            for (const l of links) {
+              const sId = typeof l.source === "string" ? l.source : (l.source as any).id
+              const tId = typeof l.target === "string" ? l.target : (l.target as any).id
+              const si = nodeIndexById.get(sId)
+              const ti = nodeIndexById.get(tId)
+              if (si === undefined || ti === undefined) continue
+              const sp = nodePositions[si]
+              const tp = nodePositions[ti]
+              verts.push(sp.x, sp.y, sp.z, tp.x, tp.y, tp.z)
+              const sc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[si].tier - 1))]
+              const tc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[ti].tier - 1))]
+              const a = MathUtils.clamp(l.weight ?? 0.3, 0.1, 0.6)
+              cols.push(sc.r * a, sc.g * a, sc.b * a, tc.r * a, tc.g * a, tc.b * a)
+            }
+            if (verts.length > 0) {
+              const eg = new BufferGeometry()
+              eg.setAttribute("position", new Float32BufferAttribute(verts, 3))
+              eg.setAttribute("color", new Float32BufferAttribute(cols, 3))
+              const em = new LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.5,
+                depthWrite: false,
+              })
+              edgesLine = new LineSegments(eg, em)
+              edgesLine.renderOrder = 1
+              scene.add(edgesLine)
+            }
+          }
+        })
+        .catch(() => {})
 
       window.addEventListener("mousemove", onMousemove, { passive: true })
       window.addEventListener("resize", onResize, { passive: true })
@@ -554,6 +469,16 @@ export function BrainScene({
       container.removeEventListener("pointerdown", onPointerDown)
       container.removeEventListener("click", onClick)
       controls.dispose()
+      if (brainWireframe) {
+        brainWireframe.geometry.dispose()
+        ;(brainWireframe.material as LineBasicMaterial).dispose()
+        scene.remove(brainWireframe)
+      }
+      if (brainDots) {
+        brainDots.geometry.dispose()
+        ;(brainDots.material as PointsMaterial).dispose()
+        scene.remove(brainDots)
+      }
       if (markersMesh) {
         markersMesh.geometry.dispose()
         ;(markersMesh.material as MeshBasicMaterial).dispose()

@@ -1,4 +1,4 @@
-interface StatusDotProps {
+﻿interface StatusDotProps {
   label?: string
   color?: string
 }
@@ -13,7 +13,7 @@ export function StatusDot({
         className="h-1.5 w-1.5 rounded-full hud-pulse"
         style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
       />
-      <span className="text-[9px] font-mono uppercase tracking-widest text-cyan-400/60">
+      <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400/60">
         {label}
       </span>
     </div>

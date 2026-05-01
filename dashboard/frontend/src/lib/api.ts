@@ -101,6 +101,37 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, limit }),
     }).then((r) => j(r)),
+  createMemory: (body: {
+    text: string
+    tier?: number
+    domain?: string
+    subdomain?: string
+  }): Promise<Memory> =>
+    fetch(`${BASE}/memories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => j(r)),
+  hebbianStats: (): Promise<{
+    count: number
+    min_weight: number
+    max_weight: number
+    avg_weight: number
+    histogram: { range: string; count: number }[]
+  }> => fetch(`${BASE}/hebbian/stats`).then((r) => j(r)),
+  hebbianDecay: (): Promise<{ edges_decayed: number }> =>
+    fetch(`${BASE}/hebbian/decay`, { method: "POST" }).then((r) => j(r)),
+  consolidate: (): Promise<{
+    clusters_found: number
+    anchors_created: number
+    nodes_connected: number
+  }> => fetch(`${BASE}/consolidate`, { method: "POST" }).then((r) => j(r)),
+  patterns: (): Promise<{ id: string; text: string; domain: string; created_at: string }[]> =>
+    fetch(`${BASE}/patterns`).then((r) => j(r)),
+  detectPatterns: (): Promise<{
+    patterns_found: number
+    procedural_nodes_created: number
+  }> => fetch(`${BASE}/patterns/detect`, { method: "POST" }).then((r) => j(r)),
   config: (): Promise<Record<string, any>> => fetch(`${BASE}/config`).then((r) => j(r)),
   updateConfig: (data: Record<string, any>): Promise<{ ok: boolean; data: Record<string, any> }> =>
     fetch(`${BASE}/config`, {

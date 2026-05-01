@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom"
+﻿import { NavLink } from "react-router-dom"
 import { Network, FileText, FolderTree, Search, Settings } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { api, type Stats } from "@/lib/api"
@@ -20,12 +20,12 @@ function NeuralPulse() {
         // NEURAL ACTIVITY
       </div>
       <div className="relative h-10 w-full overflow-hidden rounded-sm"
-        style={{ background: "rgba(6,182,212,0.04)", border: "1px solid rgba(6,182,212,0.1)" }}>
+        style={{ background: "rgba(0, 180, 90,0.04)", border: "1px solid rgba(0, 180, 90,0.1)" }}>
         <NeuralWaveform />
       </div>
       <div className="mt-2 flex items-center justify-between text-[8px] text-neutral-700 uppercase tracking-wider">
         <span>SIGNAL</span>
-        <span className="text-cyan-600/60 tabular-nums">ACTIVE</span>
+        <span className="text-emerald-600/60 tabular-nums">ACTIVE</span>
       </div>
     </div>
   )
@@ -50,9 +50,9 @@ function NeuralWaveform() {
       offsetRef.current += 0.04
 
       ctx.beginPath()
-      ctx.strokeStyle = "rgba(6,182,212,0.7)"
+      ctx.strokeStyle = "rgba(0, 255, 136, 0.75)"
       ctx.lineWidth = 1.5
-      ctx.shadowColor = "rgba(6,182,212,0.8)"
+      ctx.shadowColor = "rgba(0, 255, 136, 0.8)"
       ctx.shadowBlur = 4
 
       for (let x = 0; x <= w; x += 2) {
@@ -62,9 +62,9 @@ function NeuralWaveform() {
       }
       ctx.stroke()
 
-      // dim secondary wave
+      // dim secondary wave — orange
       ctx.beginPath()
-      ctx.strokeStyle = "rgba(59,130,246,0.3)"
+      ctx.strokeStyle = "rgba(255, 140, 38, 0.35)"
       ctx.lineWidth = 1
       ctx.shadowBlur = 0
       for (let x = 0; x <= w; x += 2) {
@@ -141,16 +141,16 @@ export function Sidebar() {
     <aside
       className="relative flex h-screen w-56 flex-col font-mono overflow-hidden select-none"
       style={{
-        background: "linear-gradient(180deg, #020817 0%, #000d1a 50%, #020817 100%)",
-        borderRight: "1px solid rgba(6,182,212,0.2)",
+        background: "linear-gradient(180deg, #020d08 0%, #010f07 50%, #020d08 100%)",
+        borderRight: "1px solid rgba(0, 255, 136, 0.12)",
       }}
     >
       {/* Animated right-edge glow */}
       <div
         className="pointer-events-none absolute right-0 top-0 h-full w-px"
         style={{
-          background: "linear-gradient(180deg, transparent 0%, rgba(6,182,212,0.6) 25%, rgba(59,130,246,0.8) 60%, rgba(168,85,247,0.4) 85%, transparent 100%)",
-          boxShadow: "0 0 10px rgba(6,182,212,0.5)",
+          background: "linear-gradient(180deg, transparent 0%, rgba(0,255,136,0.45) 25%, rgba(255,140,38,0.45) 55%, rgba(255,77,109,0.3) 82%, transparent 100%)",
+          boxShadow: "0 0 8px rgba(0, 255, 136, 0.3)",
         }}
       />
 
@@ -158,7 +158,7 @@ export function Sidebar() {
       <div
         className="pointer-events-none absolute top-0 left-0 w-full h-32"
         style={{
-          background: "radial-gradient(ellipse at 30% 0%, rgba(6,182,212,0.12) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse at 30% 0%, rgba(0,255,136,0.08) 0%, transparent 70%)",
         }}
       />
 
@@ -166,22 +166,22 @@ export function Sidebar() {
       <div
         className="pointer-events-none absolute bottom-0 left-0 w-full h-32"
         style={{
-          background: "radial-gradient(ellipse at 30% 100%, rgba(59,130,246,0.1) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse at 30% 100%, rgba(200,168,255,0.06) 0%, transparent 70%)",
         }}
       />
 
       {/* Corner brackets */}
-      <div className="pointer-events-none absolute top-2 left-2 h-5 w-5 border-t-2 border-l-2 border-cyan-400/60"
-        style={{ filter: "drop-shadow(0 0 4px rgba(34,211,238,0.7))" }} />
-      <div className="pointer-events-none absolute bottom-2 left-2 h-5 w-5 border-b-2 border-l-2 border-cyan-400/60"
-        style={{ filter: "drop-shadow(0 0 4px rgba(34,211,238,0.7))" }} />
-      <div className="pointer-events-none absolute top-2 right-2 h-5 w-5 border-t-2 border-r-2 border-cyan-400/30"
-        style={{ filter: "drop-shadow(0 0 3px rgba(34,211,238,0.4))" }} />
+      <div className="pointer-events-none absolute top-2 left-2 h-5 w-5 border-t border-l border-emerald-400/50"
+        style={{ filter: "drop-shadow(0 0 3px rgba(0, 255, 136,0.5))" }} />
+      <div className="pointer-events-none absolute bottom-2 left-2 h-5 w-5 border-b border-l"
+        style={{ borderColor: "rgba(255,140,38,0.45)", filter: "drop-shadow(0 0 3px rgba(255,140,38,0.4))" }} />
+      <div className="pointer-events-none absolute top-2 right-2 h-5 w-5 border-t border-r"
+        style={{ borderColor: "rgba(255,77,109,0.35)", filter: "drop-shadow(0 0 3px rgba(255,77,109,0.3))" }} />
 
       {/* ── Logo ── */}
       <div
         className="relative px-5 pt-6 pb-4"
-        style={{ borderBottom: "1px solid rgba(6,182,212,0.12)" }}
+        style={{ borderBottom: "1px solid rgba(0, 180, 90,0.12)" }}
       >
         <div className="flex items-center gap-3 mb-3">
           {/* Hexagon logo with spin ring */}
@@ -189,17 +189,17 @@ export function Sidebar() {
             <div
               className="absolute inset-0"
               style={{
-                background: "conic-gradient(from 0deg, rgba(6,182,212,0.0), rgba(6,182,212,0.6), rgba(59,130,246,0.6), rgba(6,182,212,0.0))",
+                background: "conic-gradient(from 0deg, rgba(0, 180, 90,0.0), rgba(0, 180, 90,0.6), rgba(0, 200, 100,0.6), rgba(0, 180, 90,0.0))",
                 clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
                 animation: "spin 6s linear infinite",
               }}
             />
             <div
-              className="absolute inset-[2px] flex items-center justify-center text-xs font-bold text-cyan-300"
+              className="absolute inset-[2px] flex items-center justify-center text-xs font-bold text-emerald-300"
               style={{
                 background: "linear-gradient(135deg, rgba(2,8,23,0.9), rgba(0,20,40,0.95))",
                 clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                textShadow: "0 0 8px rgba(34,211,238,0.9)",
+                textShadow: "0 0 8px rgba(0, 255, 136,0.9)",
               }}
             >
               LC
@@ -208,12 +208,12 @@ export function Sidebar() {
 
           <div>
             <div
-              className="text-[15px] font-bold tracking-wide text-cyan-300"
-              style={{ textShadow: "0 0 12px rgba(34,211,238,0.6)" }}
+              className="text-[15px] font-bold tracking-wide text-emerald-300"
+              style={{ textShadow: "0 0 12px rgba(0, 255, 136,0.6)" }}
             >
               LocMemory
             </div>
-            <div className="text-[8px] text-cyan-700/80 uppercase tracking-[0.25em]">
+            <div className="text-[8px] text-emerald-700/80 uppercase tracking-[0.25em]">
               v0.1.0
             </div>
           </div>
@@ -229,7 +229,7 @@ export function Sidebar() {
             <span className="text-[8px] uppercase tracking-[0.2em] text-green-400/80">ONLINE</span>
           </div>
           <span
-            className="text-[9px] tabular-nums text-cyan-700/60"
+            className="text-[9px] tabular-nums text-emerald-700/60"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             {hh}:{mm}:{ss}
@@ -240,9 +240,9 @@ export function Sidebar() {
       {/* ── Nav ── */}
       <nav className="px-3 py-4 space-y-1">
         <div className="px-2 mb-3 flex items-center gap-2">
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(6,182,212,0.3), transparent)" }} />
-          <span className="text-[8px] uppercase tracking-[0.25em] text-cyan-700/60">NAV</span>
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(6,182,212,0.3), transparent)" }} />
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 180, 90,0.3), transparent)" }} />
+          <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-700/60">NAV</span>
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(0, 180, 90,0.3), transparent)" }} />
         </div>
 
         {links.map(({ to, label, icon: Icon, id, desc }) => (
@@ -253,13 +253,13 @@ export function Sidebar() {
               cn(
                 "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-[11px] uppercase tracking-widest transition-all duration-200 overflow-hidden",
                 isActive
-                  ? "text-cyan-300"
-                  : "text-neutral-500 hover:text-cyan-100"
+                  ? "text-emerald-300"
+                  : "text-neutral-500 hover:text-emerald-100"
               )
             }
             style={({ isActive }) => isActive ? {
-              background: "linear-gradient(90deg, rgba(6,182,212,0.12) 0%, rgba(6,182,212,0.04) 100%)",
-              boxShadow: "inset 0 0 20px rgba(6,182,212,0.05)",
+              background: "linear-gradient(90deg, rgba(0, 180, 90,0.12) 0%, rgba(0, 180, 90,0.04) 100%)",
+              boxShadow: "inset 0 0 20px rgba(0, 180, 90,0.05)",
             } : {}}
           >
             {({ isActive }) => (
@@ -267,21 +267,21 @@ export function Sidebar() {
                 {/* Hover bg */}
                 {!isActive && (
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    style={{ background: "linear-gradient(90deg, rgba(6,182,212,0.07), transparent)" }} />
+                    style={{ background: "linear-gradient(90deg, rgba(0, 180, 90,0.07), transparent)" }} />
                 )}
 
                 {/* Active left bar */}
                 <div
                   className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all duration-300"
                   style={{
-                    background: isActive ? "linear-gradient(180deg, transparent, #22d3ee, transparent)" : "transparent",
-                    boxShadow: isActive ? "0 0 8px rgba(34,211,238,0.8)" : "none",
+                    background: isActive ? "linear-gradient(180deg, transparent, #00ff88, transparent)" : "transparent",
+                    boxShadow: isActive ? "0 0 8px rgba(0, 255, 136,0.8)" : "none",
                     opacity: isActive ? 1 : 0,
                   }}
                 />
 
                 {/* ID */}
-                <span className={cn("text-[8px] w-4 tabular-nums shrink-0", isActive ? "text-cyan-500/50" : "text-neutral-700 group-hover:text-neutral-600")}>
+                <span className={cn("text-[8px] w-4 tabular-nums shrink-0", isActive ? "text-emerald-500/50" : "text-neutral-700 group-hover:text-neutral-600")}>
                   {id}
                 </span>
 
@@ -289,7 +289,7 @@ export function Sidebar() {
                 <Icon
                   className="w-3.5 h-3.5 shrink-0 transition-all duration-200"
                   style={isActive
-                    ? { filter: "drop-shadow(0 0 5px rgba(34,211,238,0.8))", color: "#22d3ee" }
+                    ? { filter: "drop-shadow(0 0 5px rgba(0, 255, 136,0.8))", color: "#00ff88" }
                     : {}}
                 />
 
@@ -297,7 +297,7 @@ export function Sidebar() {
                 <div className="flex flex-col min-w-0">
                   <span className="leading-none">{label}</span>
                   {isActive && (
-                    <span className="text-[7px] text-cyan-600/60 normal-case tracking-wider mt-0.5 leading-none">
+                    <span className="text-[7px] text-emerald-600/60 normal-case tracking-wider mt-0.5 leading-none">
                       {desc}
                     </span>
                   )}
@@ -306,8 +306,8 @@ export function Sidebar() {
                 {/* Active indicator */}
                 {isActive && (
                   <span
-                    className="ml-auto h-1 w-1 rounded-full shrink-0 bg-cyan-400"
-                    style={{ boxShadow: "0 0 6px rgba(34,211,238,0.9)", animation: "pulse 2s ease-in-out infinite" }}
+                    className="ml-auto h-1 w-1 rounded-full shrink-0 bg-emerald-400"
+                    style={{ boxShadow: "0 0 6px rgba(0, 255, 136,0.9)", animation: "pulse 2s ease-in-out infinite" }}
                   />
                 )}
               </>
@@ -324,37 +324,36 @@ export function Sidebar() {
       {/* ── Stats ── */}
       <div
         className="px-4 py-3"
-        style={{ borderTop: "1px solid rgba(6,182,212,0.1)" }}
+        style={{ borderTop: "1px solid rgba(0, 180, 90,0.1)" }}
       >
         <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(6,182,212,0.3), transparent)" }} />
-          <span className="text-[8px] uppercase tracking-[0.25em] text-cyan-700/60">METRICS</span>
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(6,182,212,0.3), transparent)" }} />
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 180, 90,0.3), transparent)" }} />
+          <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-700/60">METRICS</span>
+          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(0, 180, 90,0.3), transparent)" }} />
         </div>
 
         <div className="space-y-1.5">
           {[
-            { label: "NODES",   value: stats?.nodes,  flash: flashing.nodes,   color: "#3b82f6" },
-            { label: "EDGES",   value: stats?.edges,  flash: flashing.edges,   color: "#06b6d4" },
-            { label: "DOMAINS", value: domainCount || null, flash: flashing.domains, color: "#a855f7" },
+            { label: "NODES",   value: stats?.nodes,           flash: flashing.nodes,   color: "#00ff88" },
+            { label: "EDGES",   value: stats?.edges,           flash: flashing.edges,   color: "#ff8c26" },
+            { label: "DOMAINS", value: domainCount || null,    flash: flashing.domains, color: "#ffd700" },
           ].map(({ label, value, flash, color }) => (
             <div
               key={label}
               className={cn(
-                "relative flex items-center justify-between px-2 py-1.5 rounded-sm transition-all duration-300",
-                flash && "bg-cyan-400/8"
+                "relative flex items-center justify-between px-2 py-1.5 rounded-sm transition-all duration-300"
               )}
-              style={{ background: flash ? `rgba(6,182,212,0.06)` : undefined }}
+              style={{ background: flash ? `rgba(0, 255, 136, 0.05)` : undefined }}
             >
               {/* color accent */}
               <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded-full"
-                style={{ background: color, boxShadow: `0 0 4px ${color}` }} />
+                style={{ background: color, boxShadow: `0 0 5px ${color}` }} />
               <span className="pl-2 text-[9px] uppercase tracking-wider text-neutral-600">{label}</span>
               <span
                 className="text-[12px] font-semibold tabular-nums"
                 style={{
-                  color: flash ? "#22d3ee" : color,
-                  textShadow: flash ? `0 0 10px rgba(34,211,238,0.9)` : `0 0 6px ${color}60`,
+                  color: flash ? "#00ff88" : color,
+                  textShadow: flash ? `0 0 10px rgba(0, 255, 136,0.9)` : `0 0 8px ${color}80`,
                 }}
               >
                 {value != null
@@ -371,7 +370,7 @@ export function Sidebar() {
       {/* ── Footer ── */}
       <div
         className="px-5 py-2.5 flex items-center justify-between"
-        style={{ borderTop: "1px solid rgba(6,182,212,0.08)" }}
+        style={{ borderTop: "1px solid rgba(0, 180, 90,0.08)" }}
       >
         <span className="text-[8px] uppercase tracking-[0.2em] text-neutral-700">
           BUILD 2025.04
@@ -380,7 +379,7 @@ export function Sidebar() {
           {[0, 1, 2].map(i => (
             <div
               key={i}
-              className="h-1 w-1 rounded-full bg-cyan-900"
+              className="h-1 w-1 rounded-full bg-emerald-900"
               style={{
                 animation: `pulse ${1.2 + i * 0.3}s ease-in-out infinite`,
                 animationDelay: `${i * 0.2}s`,

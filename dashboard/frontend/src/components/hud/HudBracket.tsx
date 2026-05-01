@@ -1,4 +1,4 @@
-interface HudBracketProps {
+﻿interface HudBracketProps {
   position: "tl" | "tr" | "bl" | "br"
   size?: number
 }
@@ -16,11 +16,11 @@ export function HudBracket({
 
   return (
     <div
-      className={`pointer-events-none absolute z-20 h-[${size}px] w-[${size}px] border-cyan-400/60 ${posMap[position]} hud-bracket-draw`}
+      className={`pointer-events-none absolute z-20 h-[${size}px] w-[${size}px] border-emerald-400/60 ${posMap[position]} hud-bracket-draw`}
       style={{
         height: size,
         width: size,
-        filter: "drop-shadow(0 0 6px rgba(34,211,238,0.7))",
+        filter: "drop-shadow(0 0 6px rgba(0, 255, 136,0.7))",
       }}
     />
   )

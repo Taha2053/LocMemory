@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+﻿import { useState, useEffect, useRef } from "react"
 import { BrainScene } from "@/components/BrainScene"
 import { MatrixRain } from "@/components/MatrixRain"
 import {
@@ -13,9 +13,12 @@ import {
 import { api, type Stats } from "@/lib/api"
 import { RetrievalConsole } from "@/components/RetrievalConsole"
 import { MemoryInspector } from "@/components/MemoryInspector"
+import { MemoryCreator } from "@/components/MemoryCreator"
+import { HebbianPanel } from "@/components/HebbianPanel"
+import { PatternsPanel } from "@/components/PatternsPanel"
 
-const TIER_COLORS = ["#3b82f6", "#06b6d4", "#9ec5e8", "#a855f7"] as const
-const TIER_RGB = ["59,130,246", "6,182,212", "158,197,232", "168,85,247"] as const
+const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_RGB = ["0,255,136", "255,140,38", "255,215,0", "255,77,109"] as const
 const TIER_LABELS = [
   "Core Context",
   "Anchor Memories",
@@ -77,6 +80,22 @@ export function GraphPage() {
   const [reinitting, setReinitting] = useState(false)
   const [uptime, setUptime] = useState(0)
   const [logs, setLogs] = useState<LogEvent[]>([])
+  const tierRowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [hudLines, setHudLines] = useState<Array<{ x: number; y: number }>>([])
+
+  useEffect(() => {
+    const measure = () => {
+      const pts = tierRowRefs.current.map((el) => {
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { x: r.left, y: r.top + r.height / 2 }
+      }).filter(Boolean) as { x: number; y: number }[]
+      setHudLines(pts)
+    }
+    const t = setTimeout(measure, 700)
+    window.addEventListener("resize", measure)
+    return () => { clearTimeout(t); window.removeEventListener("resize", measure) }
+  }, [])
 
   useEffect(() => {
     api.stats()
@@ -119,10 +138,10 @@ export function GraphPage() {
 
   const tierCounts = stats?.tier_counts
     ? [
-        stats.tier_counts["Core Context"] || 0,
-        stats.tier_counts["Anchor Memories"] || 0,
-        stats.tier_counts["Leaf Memories"] || 0,
-        stats.tier_counts["Procedural Memories"] || 0,
+        stats.tier_counts["context"] || 0,
+        stats.tier_counts["anchor"] || 0,
+        stats.tier_counts["leaf"] || 0,
+        stats.tier_counts["procedural"] || 0,
       ]
     : DEFAULT_TIER_COUNTS
 
@@ -140,45 +159,45 @@ export function GraphPage() {
   const getEventColor = (type: EventType) => {
     switch (type) {
       case "NODE":
-        return "text-blue-400"
+        return "text-emerald-400"
       case "EDGE":
-        return "text-cyan-400"
+        return "text-emerald-400"
       case "CLUSTER":
         return "text-purple-400"
       case "RETRIEVAL":
         return "text-neutral-400"
       case "HEBB":
-        return "text-cyan-400"
+        return "text-emerald-400"
       default:
         return "text-neutral-400"
     }
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-[#000510] font-mono">
+    <div className="relative h-screen w-full overflow-hidden bg-[#020d08] font-mono">
       {/* Layer 0: MatrixRain background */}
       <div className="absolute inset-0 z-0">
         <MatrixRain
           fontSize={14}
           speed={60}
-          foreground="#06b6d4"
-          background="#000510"
-          opacity={0.1}
+          foreground="#00ff88"
+          background="#020d08"
+          opacity={0.09}
         />
       </div>
 
       {/* Layer 1: Solid dark background for contrast */}
-      <div className="absolute inset-0 z-[1] bg-[#000510]/95" />
+      <div className="absolute inset-0 z-[1] bg-[#020d08]/95" />
 
       {/* Layer 2: Subtle gradient overlay */}
       <div
         className="pointer-events-none absolute inset-0 z-[2]"
         style={{
           background: `
-            radial-gradient(circle at 0% 0%, rgba(59,130,246,0.12), transparent 35%),
-            radial-gradient(circle at 100% 0%, rgba(6,182,212,0.12), transparent 35%),
-            radial-gradient(circle at 0% 100%, rgba(59,130,246,0.10), transparent 35%),
-            radial-gradient(circle at 100% 100%, rgba(6,182,212,0.12), transparent 35%)
+            radial-gradient(circle at 0% 0%, rgba(0, 200, 100,0.12), transparent 35%),
+            radial-gradient(circle at 100% 0%, rgba(0, 180, 90,0.12), transparent 35%),
+            radial-gradient(circle at 0% 100%, rgba(0, 200, 100,0.10), transparent 35%),
+            radial-gradient(circle at 100% 100%, rgba(0, 180, 90,0.12), transparent 35%)
           `,
         }}
       />
@@ -202,6 +221,58 @@ export function GraphPage() {
         }}
       />
 
+      {/* Layer 22: HUD leader lines — brain to Memory Tier labels */}
+      {hudLines.length === 4 && (
+        <svg
+          className="pointer-events-none absolute inset-0 z-[22]"
+          width="100%"
+          height="100%"
+          style={{ overflow: "visible" }}
+        >
+          <defs>
+            {TIER_COLORS.map((color, i) => (
+              <linearGradient key={i} id={`hud-line-grad-${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor={color} stopOpacity="0" />
+                <stop offset="40%" stopColor={color} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={color} stopOpacity="0.65" />
+              </linearGradient>
+            ))}
+          </defs>
+          {hudLines.map((end, i) => {
+            // Anchor on the brain: spread 4 points vertically around 44% height
+            const vw = window.innerWidth
+            const vh = window.innerHeight
+            const brainX = vw * 0.62
+            const brainY = vh * 0.30 + i * (vh * 0.065)
+            // Elbow: go right to 20px left of panel, then straight to row
+            const elbowX = end.x - 18
+            const path = `M ${brainX} ${brainY} L ${elbowX} ${end.y}`
+            return (
+              <g key={i}>
+                <path
+                  d={path}
+                  stroke={`url(#hud-line-grad-${i})`}
+                  strokeWidth="1"
+                  fill="none"
+                  opacity="0.9"
+                />
+                {/* Brain-side dot */}
+                <circle cx={brainX} cy={brainY} r="2.5" fill={TIER_COLORS[i]} opacity="0.85" />
+                {/* Panel-side square */}
+                <rect
+                  x={elbowX - 2.5}
+                  y={end.y - 2.5}
+                  width="5"
+                  height="5"
+                  fill={TIER_COLORS[i]}
+                  opacity="0.8"
+                />
+              </g>
+            )
+          })}
+        </svg>
+      )}
+
       <ScanlineOverlay />
 
       <HudBracket position="tl" size={48} />
@@ -213,9 +284,9 @@ export function GraphPage() {
       <DataFeedLine startX={window.innerWidth - 292} startY={460} endX={window.innerWidth - 350} endY={400} delay={1100} />
 
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
-        <div className="text-[10px] uppercase tracking-[0.25em] text-cyan-500/60 flex items-center gap-3">
+        <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/60 flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             SYS
           </span>
           <span className="separator-pulse">●</span>
@@ -229,13 +300,17 @@ export function GraphPage() {
         </div>
       </div>
 
+      <div className="absolute left-5 top-8 z-10 w-64">
+        <HebbianPanel />
+      </div>
+
       <div className="absolute left-5 top-1/2 -translate-y-1/2 z-10 w-64">
         <HudPanel id="SYS.LOG.03" className="hud-panel" progressValue={45}>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Neural Activity Log
             </div>
-            <StatusDot label="LIVE" color="#22d3ee" />
+            <StatusDot label="LIVE" color="#00ff88" />
           </div>
           <div className="space-y-0.5 max-h-[240px] overflow-hidden">
             {logs.map((log) => (
@@ -260,12 +335,13 @@ export function GraphPage() {
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Memory Tiers
             </div>
-            <StatusDot label="ACTIVE" color="#22d3ee" />
+            <StatusDot label="ACTIVE" color="#00ff88" />
           </div>
           <div className="space-y-1.5">
             {TIER_LABELS.map((label, i) => (
               <div
                 key={i}
+                ref={(el) => { tierRowRefs.current[i] = el }}
                 className="tier-row flex items-start gap-2.5 px-2 py-1.5"
                 style={{
                   "--tier-rgb": TIER_RGB[i],
@@ -309,7 +385,7 @@ export function GraphPage() {
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Graph Metrics
             </div>
-            <StatusDot label="STABLE" color="#3b82f6" />
+            <StatusDot label="STABLE" color="#00cc6a" />
           </div>
           <div className="space-y-2">
             {panelMetrics.map((m, i) => (
@@ -333,8 +409,19 @@ export function GraphPage() {
         </HudPanel>
       </div>
 
-      <div className="pointer-events-none absolute bottom-8 left-5 z-10 text-[10px] text-neutral-500 font-400">
-        move the cursor over the brain
+      <div className="absolute top-[555px] right-5 z-10 w-72 p-4">
+        <PatternsPanel />
+      </div>
+
+      <div className="absolute bottom-8 left-5 z-20 flex flex-col items-start gap-2">
+        <MemoryCreator
+          onCreated={() => {
+            api.stats().then((data) => setStats(data)).catch(() => {})
+          }}
+        />
+        <div className="pointer-events-none text-[10px] text-neutral-500 font-400">
+          move the cursor over the brain
+        </div>
       </div>
 
       <RetrievalConsole onSelect={setSelected} />
@@ -351,8 +438,8 @@ export function GraphPage() {
         onClick={handleReinit}
         className="absolute right-5 bottom-10 z-30 cursor-pointer border bg-transparent px-3 py-1.5 text-[10px] font-mono transition-all duration-200 reinit-button"
         style={{
-          borderColor: reinitting ? "rgba(34,211,238,0.8)" : "rgba(34,211,238,0.4)",
-          color: reinitting ? "rgba(34,211,238,0.9)" : "rgba(34,211,238,0.6)",
+          borderColor: reinitting ? "rgba(0, 255, 136,0.8)" : "rgba(0, 255, 136,0.4)",
+          color: reinitting ? "rgba(0, 255, 136,0.9)" : "rgba(0, 255, 136,0.6)",
         }}
         aria-label="Toggle boot sequence"
       >

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react"
+﻿import { useEffect, useState } from "react"
 import { api, type MemoryDetail } from "@/lib/api"
 import { HudPanel, StatusDot } from "@/components/hud"
 
-const TIER_COLORS = ["#3b82f6", "#06b6d4", "#9ec5e8", "#a855f7"]
+const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"]
 const TIER_NAMES = ["Core Context", "Anchor", "Leaf", "Procedural"]
 
 interface Props {
@@ -96,7 +96,7 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   rows={4}
-                  className="w-full bg-black/40 border border-cyan-400/30 focus:border-cyan-400/70 outline-none text-[12px] text-neutral-100 p-2 font-mono"
+                  className="w-full bg-black/40 border border-emerald-400/30 focus:border-emerald-400/70 outline-none text-[12px] text-neutral-100 p-2 font-mono"
                 />
               ) : (
                 <div className="text-[12px] text-neutral-100 leading-relaxed whitespace-pre-wrap">
@@ -123,14 +123,14 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
                 {data.neighbors.map((n) => (
                   <div
                     key={n.id}
-                    className="flex items-start gap-2 p-1.5 border-l-2 border-cyan-400/20 hover:border-cyan-400/60 hover:bg-cyan-400/5 transition"
+                    className="flex items-start gap-2 p-1.5 border-l-2 border-emerald-400/20 hover:border-emerald-400/60 hover:bg-emerald-400/5 transition"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] text-neutral-200 line-clamp-1">{n.text}</div>
                       <div className="flex items-center gap-2 text-[9px] text-neutral-500 uppercase tracking-wider mt-0.5">
                         {n.relation && <span>{n.relation}</span>}
                         {n.weight !== undefined && (
-                          <span className="text-cyan-400/70 tabular-nums">w {n.weight.toFixed(2)}</span>
+                          <span className="text-emerald-400/70 tabular-nums">w {n.weight.toFixed(2)}</span>
                         )}
                       </div>
                     </div>
@@ -139,13 +139,13 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-cyan-400/10">
+            <div className="flex items-center gap-2 pt-2 border-t border-emerald-400/10">
               {editing ? (
                 <>
                   <button
                     onClick={save}
                     disabled={saving || !draft.trim()}
-                    className="scan-button border border-cyan-400/40 px-3 py-1 text-[10px] text-cyan-400/80 uppercase tracking-wider"
+                    className="scan-button border border-emerald-400/40 px-3 py-1 text-[10px] text-emerald-400/80 uppercase tracking-wider"
                   >
                     {saving ? "saving..." : "[ save ]"}
                   </button>
@@ -160,7 +160,7 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
                 <>
                   <button
                     onClick={() => setEditing(true)}
-                    className="scan-button border border-cyan-400/40 px-3 py-1 text-[10px] text-cyan-400/70 uppercase tracking-wider"
+                    className="scan-button border border-emerald-400/40 px-3 py-1 text-[10px] text-emerald-400/70 uppercase tracking-wider"
                   >
                     [ edit ]
                   </button>
@@ -182,7 +182,7 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="border border-cyan-400/10 bg-black/30 p-1.5">
+    <div className="border border-emerald-400/10 bg-black/30 p-1.5">
       <div className="text-[8px] uppercase tracking-widest text-neutral-500 mb-0.5">{label}</div>
       <div className={`text-[11px] text-neutral-200 truncate ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>

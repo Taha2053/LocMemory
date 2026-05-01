@@ -11,11 +11,22 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from core.memory import GraphManager, GraphRetriever, MemoryClassifier
+from core.memory import (
+    GraphManager,
+    GraphRetriever,
+    MemoryClassifier,
+    HebbianUpdater,
+    MemoryConsolidator,
+    ProceduralDetector,
+    TIER_CONTEXT,
+    TIER_ANCHOR,
+    TIER_LEAF,
+    TIER_PROCEDURAL,
+)
 from core.memory.classifier import DEFAULT_SUBDOMAINS
 from core.memory.graph import TIER_NAMES
 from core.settings.config import get_config
@@ -23,7 +34,16 @@ from core.settings.config import get_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-state: dict = {"gm": None, "retriever": None, "classifier": None}
+state: dict = {
+    "gm": None,
+    "retriever": None,
+    "classifier": None,
+    "hebbian": None,
+    "consolidator": None,
+    "procedural": None,
+    "addition_count": 0,      # triggers consolidation every 30
+    "interaction_count": 0,   # triggers procedural detection every 50
+}
 
 
 @asynccontextmanager
@@ -39,12 +59,20 @@ async def lifespan(app: FastAPI):
     gm.load_graph()
 
     classifier = MemoryClassifier()
-    retriever = GraphRetriever(gm, classifier=classifier)
+    retriever  = GraphRetriever(gm, classifier=classifier)
+    hebbian    = HebbianUpdater(gm)
+    consolidator = MemoryConsolidator(gm)
+    procedural = ProceduralDetector(gm)
 
-    state["gm"] = gm
-    state["classifier"] = classifier
-    state["retriever"] = retriever
-    print(f"[dashboard] loaded graph: {gm.graph.number_of_nodes()} nodes")
+    state["gm"]          = gm
+    state["classifier"]  = classifier
+    state["retriever"]   = retriever
+    state["hebbian"]     = hebbian
+    state["consolidator"] = consolidator
+    state["procedural"]  = procedural
+
+    print(f"[dashboard] loaded graph: {gm.graph.number_of_nodes()} nodes, "
+          f"{gm.graph.number_of_edges()} edges")
 
     yield
 
@@ -54,7 +82,7 @@ async def lifespan(app: FastAPI):
         gm.close()
 
 
-app = FastAPI(title="LocMemory Dashboard API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="LocMemory Dashboard API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,7 +92,14 @@ app.add_middleware(
 )
 
 
-# ───────────────────────── models ─────────────────────────
+# ─────────────────────────── models ───────────────────────────
+
+class MemoryCreate(BaseModel):
+    text: str
+    tier: int = TIER_LEAF
+    domain: Optional[str] = None    # auto-classified when omitted
+    subdomain: Optional[str] = None
+
 
 class MemoryPatch(BaseModel):
     text: str
@@ -79,14 +114,47 @@ class ConfigUpdate(BaseModel):
     data: dict
 
 
-# ───────────────────────── health ─────────────────────────
+# ─────────────────────────── background helpers ───────────────────────────
+
+def _hebbian_bg(node_ids: list[str]) -> None:
+    hebbian: HebbianUpdater = state["hebbian"]
+    if hebbian and node_ids:
+        try:
+            hebbian.update_after_retrieval(node_ids)
+        except Exception as e:
+            print(f"[hebbian] background update error: {e}")
+
+
+def _maybe_consolidate() -> None:
+    state["addition_count"] += 1
+    consolidator: MemoryConsolidator = state["consolidator"]
+    if consolidator and consolidator.should_run(state["addition_count"]):
+        try:
+            consolidator.run()
+            print(f"[consolidator] ran at addition #{state['addition_count']}")
+        except Exception as e:
+            print(f"[consolidator] error: {e}")
+
+
+def _maybe_detect_patterns() -> None:
+    state["interaction_count"] += 1
+    procedural: ProceduralDetector = state["procedural"]
+    if procedural and procedural.increment_interaction():
+        try:
+            procedural.run_detection()
+            print(f"[procedural] ran at interaction #{state['interaction_count']}")
+        except Exception as e:
+            print(f"[procedural] error: {e}")
+
+
+# ─────────────────────────── health ───────────────────────────
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-# ───────────────────────── /api/stats ─────────────────────────
+# ─────────────────────────── /api/stats ───────────────────────────
 
 @app.get("/api/stats")
 def stats():
@@ -107,11 +175,11 @@ def stats():
     }
 
 
-# ───────────────────────── /api/graph ─────────────────────────
+# ─────────────────────────── /api/graph ───────────────────────────
 
 @app.get("/api/graph")
 def get_graph():
-    """Return nodes + edges suitable for a force-directed view."""
+    """Return all nodes + edges for the force-directed visualization."""
     gm: GraphManager = state["gm"]
     g = gm.graph
     nodes = [
@@ -138,7 +206,7 @@ def get_graph():
     return {"nodes": nodes, "links": links}
 
 
-# ───────────────────────── /api/memories ─────────────────────────
+# ─────────────────────────── /api/memories ───────────────────────────
 
 @app.get("/api/memories")
 def list_memories(
@@ -170,6 +238,64 @@ def list_memories(
         })
     results.sort(key=lambda r: r["created_at"], reverse=True)
     return results[:limit]
+
+
+@app.post("/api/memories", status_code=201)
+def create_memory(body: MemoryCreate, background_tasks: BackgroundTasks):
+    """
+    Manually add a new memory node.
+    Domain/subdomain are auto-classified when omitted.
+    Triggers Hebbian decay + consolidation check in background.
+    """
+    gm: GraphManager = state["gm"]
+    classifier: MemoryClassifier = state["classifier"]
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "text must not be empty")
+
+    tier = body.tier
+    if tier not in (TIER_CONTEXT, TIER_ANCHOR, TIER_LEAF, TIER_PROCEDURAL):
+        raise HTTPException(400, f"tier must be 1–4, got {tier}")
+
+    domain    = body.domain or ""
+    subdomain = body.subdomain or ""
+
+    if not domain:
+        try:
+            result    = classifier.classify(text)
+            domain    = result.get("domain", "")
+            subdomain = result.get("subdomain", "")
+        except Exception:
+            pass
+
+    embedding = None
+    try:
+        embedding = classifier._embed([text])[0]
+    except Exception:
+        pass
+
+    node_id = gm.add_node(
+        text=text,
+        tier=tier,
+        domain=domain,
+        subdomain=subdomain,
+        embedding=embedding,
+    )
+
+    background_tasks.add_task(_hebbian_bg, [node_id])
+    background_tasks.add_task(_maybe_consolidate)
+
+    created_at = gm.graph.nodes[node_id].get("created_at", "")
+    return {
+        "id": node_id,
+        "text": text,
+        "tier": tier,
+        "tier_name": TIER_NAMES.get(tier, "?"),
+        "domain": domain,
+        "subdomain": subdomain,
+        "created_at": created_at,
+    }
 
 
 @app.get("/api/memories/{node_id}")
@@ -215,7 +341,7 @@ def delete_memory(node_id: str):
     return {"deleted": node_id}
 
 
-# ───────────────────────── /api/domains ─────────────────────────
+# ─────────────────────────── /api/domains ───────────────────────────
 
 @app.get("/api/domains")
 def list_domains():
@@ -224,7 +350,7 @@ def list_domains():
 
     counts: dict[str, dict[str, int]] = {}
     for _, data in gm.graph.nodes(data=True):
-        d = data.get("domain") or "(none)"
+        d  = data.get("domain") or "(none)"
         sd = data.get("subdomain") or ""
         counts.setdefault(d, {"_total": 0})
         counts[d]["_total"] += 1
@@ -255,20 +381,120 @@ def list_domains():
     return domains
 
 
-# ───────────────────────── /api/retrieve ─────────────────────────
+# ─────────────────────────── /api/retrieve ───────────────────────────
 
 @app.post("/api/retrieve")
-def retrieve(req: RetrieveRequest):
+def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
+    """
+    Retrieve memories for a query.
+    Fires Hebbian update + procedural detection check in background.
+    """
     retriever: GraphRetriever = state["retriever"]
     results = retriever.retrieve(req.query)
+    top = results[: req.limit]
+
+    retrieved_ids = [r["node_id"] for r in top if "node_id" in r]
+    if retrieved_ids:
+        background_tasks.add_task(_hebbian_bg, retrieved_ids)
+        background_tasks.add_task(_maybe_detect_patterns)
+
     return {
         "query": req.query,
         "query_domain": retriever._query_domain,
-        "results": results[: req.limit],
+        "results": top,
     }
 
 
-# ───────────────────────── /api/config ─────────────────────────
+# ─────────────────────────── /api/hebbian ───────────────────────────
+
+@app.get("/api/hebbian/stats")
+def hebbian_stats():
+    """Edge weight distribution from the Hebbian updater."""
+    hebbian: HebbianUpdater = state["hebbian"]
+    if not hebbian:
+        raise HTTPException(503, "Hebbian updater not available")
+
+    edge_stats = hebbian.get_edge_stats()
+
+    gm: GraphManager = state["gm"]
+    weights = [data.get("weight", 0.1) for _, _, data in gm.graph.edges(data=True)]
+    buckets = [0] * 10
+    for w in weights:
+        buckets[min(int(w / 0.5), 9)] += 1
+
+    return {
+        **edge_stats,
+        "histogram": [
+            {"range": f"{i * 0.5:.1f}–{(i + 1) * 0.5:.1f}", "count": buckets[i]}
+            for i in range(10)
+        ],
+    }
+
+
+@app.post("/api/hebbian/decay")
+def run_hebbian_decay():
+    """Manually trigger time-based decay on all edges."""
+    hebbian: HebbianUpdater = state["hebbian"]
+    if not hebbian:
+        raise HTTPException(503, "Hebbian updater not available")
+    updated = hebbian.apply_decay()
+    return {"edges_decayed": updated}
+
+
+# ─────────────────────────── /api/consolidate ───────────────────────────
+
+@app.post("/api/consolidate")
+def run_consolidation():
+    """
+    Manually trigger Louvain clustering → create Tier 2 Anchor nodes.
+    May take several seconds if Ollama is called for summarization.
+    """
+    consolidator: MemoryConsolidator = state["consolidator"]
+    if not consolidator:
+        raise HTTPException(503, "Consolidator not available")
+    try:
+        return consolidator.run()
+    except ImportError as e:
+        raise HTTPException(503, f"Missing dependency: {e}")
+    except Exception as e:
+        raise HTTPException(500, f"Consolidation failed: {e}")
+
+
+# ─────────────────────────── /api/patterns ───────────────────────────
+
+@app.get("/api/patterns")
+def get_patterns():
+    """Return all existing Tier 4 procedural pattern nodes."""
+    procedural: ProceduralDetector = state["procedural"]
+    if not procedural:
+        raise HTTPException(503, "Procedural detector not available")
+    return [
+        {
+            "id": n["id"],
+            "text": n.get("text", ""),
+            "domain": n.get("domain", ""),
+            "created_at": n.get("created_at", ""),
+        }
+        for n in procedural.get_procedural_nodes()
+    ]
+
+
+@app.post("/api/patterns/detect")
+def detect_patterns():
+    """
+    Manually trigger procedural pattern detection.
+    Finds cross-domain coactivation patterns and creates Tier 4 nodes.
+    """
+    procedural: ProceduralDetector = state["procedural"]
+    if not procedural:
+        raise HTTPException(503, "Procedural detector not available")
+    try:
+        return procedural.run_detection()
+    except Exception as e:
+        raise HTTPException(500, f"Pattern detection failed: {e}")
+
+
+# ─────────────────────────── /api/config ───────────────────────────
 
 @app.get("/api/config")
 def get_config_api():
