@@ -106,13 +106,8 @@ export function BrainScene({
     const container = containerRef.current
     if (!container) return
 
-    // Use getBoundingClientRect to get the actual computed dimensions
-    // This ensures we get the correct size even on initial render
-    const rect = container.getBoundingClientRect()
-    const size = {
-      width: rect.width > 0 ? rect.width : 800,
-      height: rect.height > 0 ? rect.height : 600,
-    }
+    // Mutable size object shared by raycaster, onResize, and ResizeObserver
+    const size = { width: 800, height: 600 }
 
     const scene = new Scene()
     const camera = new PerspectiveCamera(75, size.width / size.height, 0.1, 100)
@@ -124,9 +119,33 @@ export function BrainScene({
       alpha: true,
       antialias: window.devicePixelRatio === 1,
     })
-    renderer.setSize(size.width, size.height)
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio))
     container.appendChild(renderer.domElement)
+
+    // Apply real container dimensions and update camera aspect
+    const applySize = (w: number, h: number) => {
+      size.width = w
+      size.height = h
+      camera.aspect = w / h
+      camera.updateProjectionMatrix()
+      renderer.setSize(w, h)
+    }
+
+    // Use ResizeObserver so we get the true post-layout size.
+    // It fires synchronously before the first paint once the container
+    // has non-zero dimensions, eliminating the need to wait for a resize.
+    let sizeObserver: ResizeObserver | null = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          applySize(width, height)
+          sizeObserver?.disconnect()
+          sizeObserver = null
+          break
+        }
+      }
+    })
+    sizeObserver.observe(container)
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
@@ -291,11 +310,9 @@ export function BrainScene({
     }
 
     const onResize = () => {
-      size.width = container.clientWidth || 800
-      size.height = container.clientHeight || 600
-      camera.aspect = size.width / size.height
-      camera.updateProjectionMatrix()
-      renderer.setSize(size.width, size.height)
+      const w = container.clientWidth || 800
+      const h = container.clientHeight || 600
+      applySize(w, h)
     }
 
     const animate = () => {
@@ -565,6 +582,8 @@ export function BrainScene({
     return () => {
       disposed = true
       cancelAnimationFrame(frameId)
+      sizeObserver?.disconnect()
+      sizeObserver = null
       window.removeEventListener("mousemove", onMousemove)
       window.removeEventListener("resize", onResize)
       container.removeEventListener("pointerdown", onPointerDown)
