@@ -2,7 +2,7 @@
 import { api, type MemoryDetail } from "@/lib/api"
 import { HudPanel, StatusDot } from "@/components/hud"
 
-const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"]
+const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"]
 const TIER_NAMES = ["Core Context", "Anchor", "Leaf", "Procedural"]
 
 interface Props {

@@ -20,7 +20,7 @@ export function HudBracket({
       style={{
         height: size,
         width: size,
-        filter: "drop-shadow(0 0 6px rgba(0, 255, 136,0.7))",
+        filter: "drop-shadow(0 0 6px rgba(0, 196, 188,0.7))",
       }}
     />
   )

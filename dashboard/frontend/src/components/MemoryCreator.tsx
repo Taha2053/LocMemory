@@ -9,7 +9,7 @@ const TIER_OPTIONS = [
   { value: 4, label: "Procedural — skill / workflow" },
 ]
 
-const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"]
+const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"]
 
 interface Props {
   onCreated?: (memory: Memory) => void
@@ -60,16 +60,16 @@ export function MemoryCreator({ onCreated }: Props) {
         onClick={() => setOpen(true)}
         className="pointer-events-auto border bg-transparent px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest transition-all duration-200"
         style={{
-          borderColor: "rgba(0, 160, 80,0.4)",
-          color: "rgba(0, 160, 80,0.65)",
+          borderColor: "rgba(59, 160, 215,0.4)",
+          color: "rgba(59, 160, 215,0.65)",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "rgba(0, 160, 80,0.8)"
-          e.currentTarget.style.color = "rgba(0, 160, 80,0.9)"
+          e.currentTarget.style.borderColor = "rgba(59, 160, 215,0.8)"
+          e.currentTarget.style.color = "rgba(59, 160, 215,0.9)"
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = "rgba(0, 160, 80,0.4)"
-          e.currentTarget.style.color = "rgba(0, 160, 80,0.65)"
+          e.currentTarget.style.borderColor = "rgba(59, 160, 215,0.4)"
+          e.currentTarget.style.color = "rgba(59, 160, 215,0.65)"
         }}
       >
         [ + inject memory ]

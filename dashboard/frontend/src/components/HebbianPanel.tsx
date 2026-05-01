@@ -44,7 +44,7 @@ export function HebbianPanel() {
         <div className="text-[10px] uppercase tracking-widest text-neutral-400">
           Edge Dynamics
         </div>
-        <StatusDot label="LIVE" color="#00cc6a" />
+        <StatusDot label="LIVE" color="#009b94" />
       </div>
 
       {!data ? (
@@ -65,7 +65,7 @@ export function HebbianPanel() {
                     className="flex-1 transition-all duration-500"
                     style={{
                       height: `${Math.max(pct, 2)}%`,
-                      background: `rgba(0, 180, 90,${0.3 + (pct / 100) * 0.6})`,
+                      background: `rgba(0, 196, 188,${0.3 + (pct / 100) * 0.6})`,
                     }}
                     title={`${b.range}: ${b.count}`}
                   />

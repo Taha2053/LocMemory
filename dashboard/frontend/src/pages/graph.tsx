@@ -17,8 +17,8 @@ import { MemoryCreator } from "@/components/MemoryCreator"
 import { HebbianPanel } from "@/components/HebbianPanel"
 import { PatternsPanel } from "@/components/PatternsPanel"
 
-const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"] as const
-const TIER_RGB = ["0,255,136", "255,140,38", "255,215,0", "255,77,109"] as const
+const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_RGB = ["0,196,188", "255,140,38", "255,215,0", "255,77,109"] as const
 const TIER_LABELS = [
   "Core Context",
   "Anchor Memories",
@@ -174,30 +174,30 @@ export function GraphPage() {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-[#020d08] font-mono">
+    <div className="relative h-screen w-full overflow-hidden bg-[#020d0d] font-mono">
       {/* Layer 0: MatrixRain background */}
       <div className="absolute inset-0 z-0">
         <MatrixRain
           fontSize={14}
           speed={60}
-          foreground="#00ff88"
-          background="#020d08"
+          foreground="#00c4bc"
+          background="#020d0d"
           opacity={0.09}
         />
       </div>
 
       {/* Layer 1: Solid dark background for contrast */}
-      <div className="absolute inset-0 z-[1] bg-[#020d08]/95" />
+      <div className="absolute inset-0 z-[1] bg-[#020d0d]/95" />
 
       {/* Layer 2: Subtle gradient overlay */}
       <div
         className="pointer-events-none absolute inset-0 z-[2]"
         style={{
           background: `
-            radial-gradient(circle at 0% 0%, rgba(0, 200, 100,0.12), transparent 35%),
-            radial-gradient(circle at 100% 0%, rgba(0, 180, 90,0.12), transparent 35%),
-            radial-gradient(circle at 0% 100%, rgba(0, 200, 100,0.10), transparent 35%),
-            radial-gradient(circle at 100% 100%, rgba(0, 180, 90,0.12), transparent 35%)
+            radial-gradient(circle at 0% 0%, rgba(59, 200, 215,0.12), transparent 35%),
+            radial-gradient(circle at 100% 0%, rgba(0, 196, 188,0.12), transparent 35%),
+            radial-gradient(circle at 0% 100%, rgba(59, 200, 215,0.10), transparent 35%),
+            radial-gradient(circle at 100% 100%, rgba(0, 196, 188,0.12), transparent 35%)
           `,
         }}
       />
@@ -310,7 +310,7 @@ export function GraphPage() {
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Neural Activity Log
             </div>
-            <StatusDot label="LIVE" color="#00ff88" />
+            <StatusDot label="LIVE" color="#00c4bc" />
           </div>
           <div className="space-y-0.5 max-h-[240px] overflow-hidden">
             {logs.map((log) => (
@@ -335,7 +335,7 @@ export function GraphPage() {
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Memory Tiers
             </div>
-            <StatusDot label="ACTIVE" color="#00ff88" />
+            <StatusDot label="ACTIVE" color="#00c4bc" />
           </div>
           <div className="space-y-1.5">
             {TIER_LABELS.map((label, i) => (
@@ -385,7 +385,7 @@ export function GraphPage() {
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
               Graph Metrics
             </div>
-            <StatusDot label="STABLE" color="#00cc6a" />
+            <StatusDot label="STABLE" color="#009b94" />
           </div>
           <div className="space-y-2">
             {panelMetrics.map((m, i) => (
@@ -438,8 +438,8 @@ export function GraphPage() {
         onClick={handleReinit}
         className="absolute right-5 bottom-10 z-30 cursor-pointer border bg-transparent px-3 py-1.5 text-[10px] font-mono transition-all duration-200 reinit-button"
         style={{
-          borderColor: reinitting ? "rgba(0, 255, 136,0.8)" : "rgba(0, 255, 136,0.4)",
-          color: reinitting ? "rgba(0, 255, 136,0.9)" : "rgba(0, 255, 136,0.6)",
+          borderColor: reinitting ? "rgba(0, 196, 188,0.8)" : "rgba(0, 196, 188,0.4)",
+          color: reinitting ? "rgba(0, 196, 188,0.9)" : "rgba(0, 196, 188,0.6)",
         }}
         aria-label="Toggle boot sequence"
       >

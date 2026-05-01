@@ -3,7 +3,7 @@ import { api, type Domain } from "@/lib/api"
 import { ChevronRight, ChevronDown } from "lucide-react"
 import { ScanlineOverlay } from "@/components/hud"
 
-const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"] as const
 
 export function DomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([])
@@ -22,32 +22,32 @@ export function DomainsPage() {
   const totalMemories = domains.reduce((a, d) => a + d.total, 0)
 
   return (
-    <div className="relative h-full min-h-0 bg-[#020d08] font-mono overflow-y-auto">
+    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
       <ScanlineOverlay />
 
       {/* Ambient corner glow */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(0, 200, 100,0.08), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 180, 90,0.06), transparent 40%)" }} />
+        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(59, 200, 215,0.08), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 196, 188,0.06), transparent 40%)" }} />
 
       {/* Corner brackets */}
       <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
       <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
       <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
       <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
 
       <div className="relative z-10 max-w-3xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-px w-8 bg-emerald-400/40" style={{ boxShadow: "0 0 4px rgba(0, 255, 136,0.4)" }} />
+            <div className="h-px w-8 bg-emerald-400/40" style={{ boxShadow: "0 0 4px rgba(0, 196, 188,0.4)" }} />
             <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.DOMAINS</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
-            style={{ textShadow: "0 0 20px rgba(0, 255, 136,0.4)" }}>
+            style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.4)" }}>
             Knowledge Domains
           </h1>
           <p className="mt-1 text-[11px] text-neutral-500 uppercase tracking-wider">
@@ -64,10 +64,10 @@ export function DomainsPage() {
           ].map(({ label, value }) => (
             <div key={label}
               className="px-4 py-3 border border-emerald-400/15 rounded-sm"
-              style={{ background: "rgba(0, 180, 90,0.04)", boxShadow: "0 0 20px rgba(0, 180, 90,0.06)" }}>
+              style={{ background: "rgba(0, 196, 188,0.04)", boxShadow: "0 0 20px rgba(0, 196, 188,0.06)" }}>
               <div className="text-[8px] uppercase tracking-[0.25em] text-neutral-600 mb-1">{label}</div>
               <div className="text-xl font-bold tabular-nums text-emerald-300"
-                style={{ textShadow: "0 0 8px rgba(0, 255, 136,0.5)" }}>
+                style={{ textShadow: "0 0 8px rgba(0, 196, 188,0.5)" }}>
                 {value.toLocaleString()}
               </div>
             </div>
@@ -90,7 +90,7 @@ export function DomainsPage() {
                 <div key={d.name}
                   className="border border-white/5 rounded-sm overflow-hidden transition-all duration-200"
                   style={{
-                    background: isOpen ? "rgba(0, 180, 90,0.04)" : "rgba(0,5,16,0.6)",
+                    background: isOpen ? "rgba(0, 196, 188,0.04)" : "rgba(0,5,16,0.6)",
                     borderColor: isOpen ? `${color}30` : "rgba(255,255,255,0.05)",
                     boxShadow: isOpen ? `0 0 20px ${color}15` : "none",
                   }}>

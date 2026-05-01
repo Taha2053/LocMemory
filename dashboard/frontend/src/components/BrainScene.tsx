@@ -27,9 +27,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import gsap from "gsap"
 import { api } from "@/lib/api"
 
-// Data-viz tier palette — green / orange / amber / rose
+// Data-viz tier palette — teal / orange / amber / rose
 const TIER_PALETTE = [
-  new Color(0x00ff88), // Core Context — bright emerald
+  new Color(0x00c4bc), // Core Context — bright teal
   new Color(0xff8c26), // Anchor Memories — warm orange
   new Color(0xffd700), // Leaf Memories — amber gold
   new Color(0xff4d6d), // Procedural — rose red
@@ -113,6 +113,7 @@ export function BrainScene({
     // Brain visual refs
     let brainWireframe: LineSegments | null = null
     let brainDots: Points | null = null
+    let stars: Points | null = null
 
     // Memory overlay state
     let markersMesh: InstancedMesh | null = null
@@ -275,6 +276,10 @@ export function BrainScene({
       // Slow Y rotation
       if (brainWireframe) brainWireframe.rotation.y += 0.0008
       if (brainDots) brainDots.rotation.y += 0.0008
+      if (stars) {
+        stars.rotation.y -= 0.0002
+        stars.rotation.x += 0.0001
+      }
 
       // Hover scale on markers
       if (markersMesh && nodeIds.length > 0 && hoveredIdx !== prevHoveredIdx) {
@@ -301,7 +306,7 @@ export function BrainScene({
       // ── Wireframe brain mesh ──
       const wireGeo = new WireframeGeometry(brainMesh.geometry)
       const wireMat = new LineBasicMaterial({
-        color: new Color(0x00ff88),
+        color: new Color(0x00c4bc),
         transparent: true,
         opacity: 0.2,
         depthWrite: false,
@@ -313,7 +318,7 @@ export function BrainScene({
       const dotsGeo = new BufferGeometry()
       dotsGeo.setAttribute("position", brainMesh.geometry.getAttribute("position").clone())
       const dotsMat = new PointsMaterial({
-        color: new Color(0x00ff88),
+        color: new Color(0x00c4bc),
         size: 0.012,
         transparent: true,
         opacity: 0.85,
@@ -346,7 +351,7 @@ export function BrainScene({
         depthWrite: false,
         sizeAttenuation: true,
       })
-      const stars = new Points(starGeo, starMat)
+      stars = new Points(starGeo, starMat)
       scene.add(stars)
 
       // ── Load real memories overlaid on the brain ──

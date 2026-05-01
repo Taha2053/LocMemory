@@ -3,7 +3,7 @@ import { api, type Memory, type MemoryDetail, type Domain } from "@/lib/api"
 import { ChevronDown, ChevronRight, X } from "lucide-react"
 import { ScanlineOverlay } from "@/components/hud"
 
-const TIER_COLORS = ["#00ff88", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"] as const
 
 const TYPEWRITER_TEXT = "SEARCH MEMORIES..."
 let typewriterInterval: ReturnType<typeof setInterval> | null = null
@@ -88,21 +88,21 @@ export function MemoriesPage() {
   const getTierColor = (tier: number) => TIER_COLORS[tier] || TIER_COLORS[0]
 
   return (
-    <div className="relative flex h-full min-h-0 bg-[#020d08] font-mono">
+    <div className="relative flex h-full min-h-0 bg-[#020d0d] font-mono">
       <ScanlineOverlay />
 
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0 z-0"
-        style={{ background: "radial-gradient(ellipse at 0% 50%, rgba(0, 200, 100,0.06), transparent 40%)" }} />
+        style={{ background: "radial-gradient(ellipse at 0% 50%, rgba(59, 200, 215,0.06), transparent 40%)" }} />
 
       {/* ── Domains sidebar ── */}
       <div
         className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto"
-        style={{ borderRight: "1px solid rgba(0, 180, 90,0.12)", background: "rgba(0,5,16,0.8)" }}
+        style={{ borderRight: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 180, 90,0.1)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="h-px w-4" style={{ background: "rgba(0, 180, 90,0.4)" }} />
+            <div className="h-px w-4" style={{ background: "rgba(0, 196, 188,0.4)" }} />
             <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60">// FILTER</span>
           </div>
           <div className="text-[11px] uppercase tracking-wider text-neutral-400">Domains</div>
@@ -158,7 +158,7 @@ export function MemoriesPage() {
         </div>
 
         {activeDomain && (
-          <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0, 180, 90,0.08)" }}>
+          <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}>
             <button
               onClick={() => setActiveDomain(null)}
               className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors"
@@ -175,16 +175,16 @@ export function MemoriesPage() {
         {/* Search bar */}
         <div className="relative mb-5">
           <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-400/40"
-            style={{ boxShadow: "0 0 6px rgba(0, 255, 136,0.4)" }} />
+            style={{ boxShadow: "0 0 6px rgba(0, 196, 188,0.4)" }} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={typewriterText || TYPEWRITER_TEXT}
             className="w-full bg-transparent py-2.5 pl-4 pr-24 text-[12px] text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
-            style={{ borderBottom: "1px solid rgba(0, 180, 90,0.2)" }}
-            onFocus={(e) => (e.target.style.borderBottomColor = "rgba(0, 255, 136,0.5)")}
-            onBlur={(e) => (e.target.style.borderBottomColor = "rgba(0, 180, 90,0.2)")}
+            style={{ borderBottom: "1px solid rgba(0, 196, 188,0.2)" }}
+            onFocus={(e) => (e.target.style.borderBottomColor = "rgba(0, 196, 188,0.5)")}
+            onBlur={(e) => (e.target.style.borderBottomColor = "rgba(0, 196, 188,0.2)")}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {(activeDomain || search) && (
@@ -260,8 +260,8 @@ export function MemoriesPage() {
                   disabled={loadingMore}
                   className="w-full mt-4 py-2.5 text-[10px] uppercase tracking-widest border transition-all"
                   style={{
-                    borderColor: "rgba(0, 180, 90,0.2)",
-                    color: loadingMore ? "rgba(0, 255, 136,0.3)" : "rgba(0, 255, 136,0.6)",
+                    borderColor: "rgba(0, 196, 188,0.2)",
+                    color: loadingMore ? "rgba(0, 196, 188,0.3)" : "rgba(0, 196, 188,0.6)",
                   }}
                 >
                   {loadingMore ? "LOADING..." : "LOAD MORE"}
@@ -281,11 +281,11 @@ export function MemoriesPage() {
       {/* ── Detail panel ── */}
       <div
         className="hidden 2xl:flex relative z-10 w-64 shrink-0 flex-col overflow-y-auto"
-        style={{ borderLeft: "1px solid rgba(0, 180, 90,0.12)", background: "rgba(0,5,16,0.8)" }}
+        style={{ borderLeft: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 180, 90,0.1)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="h-px w-4" style={{ background: "rgba(0, 180, 90,0.4)" }} />
+            <div className="h-px w-4" style={{ background: "rgba(0, 196, 188,0.4)" }} />
             <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60">// DETAIL</span>
           </div>
           <div className="text-[11px] uppercase tracking-wider text-neutral-400">Memory Inspector</div>
@@ -317,7 +317,7 @@ export function MemoriesPage() {
               </div>
 
               {selectedMemory.neighbors && selectedMemory.neighbors.length > 0 && (
-                <div className="pt-3" style={{ borderTop: "1px solid rgba(0, 180, 90,0.1)" }}>
+                <div className="pt-3" style={{ borderTop: "1px solid rgba(0, 196, 188,0.1)" }}>
                   <div className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60 mb-2">// RELATED</div>
                   <div className="space-y-1.5">
                     {selectedMemory.neighbors.slice(0, 5).map((n) => (
