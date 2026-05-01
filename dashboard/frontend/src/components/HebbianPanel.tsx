@@ -65,7 +65,7 @@ export function HebbianPanel() {
                     className="flex-1 transition-all duration-500"
                     style={{
                       height: `${Math.max(pct, 2)}%`,
-                      background: `rgba(0, 196, 188,${0.3 + (pct / 100) * 0.6})`,
+                      background: `rgba(0, 255, 136,${0.3 + (pct / 100) * 0.6})`,
                     }}
                     title={`${b.range}: ${b.count}`}
                   />

@@ -39,6 +39,9 @@ export interface GraphLink {
 export interface Stats {
   nodes: number
   edges: number
+  density: number
+  avg_degree: number
+  communities: number
   tier_counts: Record<string, number>
   domain_counts: Record<string, number>
 }

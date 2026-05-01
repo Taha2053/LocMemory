@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+import networkx as nx
+
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -167,9 +169,19 @@ def stats():
         tier_counts[tier_name] = tier_counts.get(tier_name, 0) + 1
         dom = data.get("domain", "") or "(none)"
         domain_counts[dom] = domain_counts.get(dom, 0) + 1
+
+    n = g.number_of_nodes()
+    e = g.number_of_edges()
+    density = round(nx.density(g), 6) if n > 1 else 0.0
+    avg_degree = round((2 * e / n), 2) if n > 0 else 0.0
+    communities = nx.number_weakly_connected_components(g) if n > 0 else 0
+
     return {
-        "nodes": g.number_of_nodes(),
-        "edges": g.number_of_edges(),
+        "nodes": n,
+        "edges": e,
+        "density": density,
+        "avg_degree": avg_degree,
+        "communities": communities,
         "tier_counts": tier_counts,
         "domain_counts": domain_counts,
     }
