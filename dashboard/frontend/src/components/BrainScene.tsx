@@ -106,9 +106,12 @@ export function BrainScene({
     const container = containerRef.current
     if (!container) return
 
+    // Use getBoundingClientRect to get the actual computed dimensions
+    // This ensures we get the correct size even on initial render
+    const rect = container.getBoundingClientRect()
     const size = {
-      width: container.clientWidth || 800,
-      height: container.clientHeight || 600,
+      width: rect.width > 0 ? rect.width : 800,
+      height: rect.height > 0 ? rect.height : 600,
     }
 
     const scene = new Scene()

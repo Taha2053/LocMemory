@@ -3,7 +3,7 @@ import { api, type Memory, type MemoryDetail, type Domain } from "@/lib/api"
 import { ChevronDown, ChevronRight, X } from "lucide-react"
 import { ScanlineOverlay } from "@/components/hud"
 
-const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 
 const TYPEWRITER_TEXT = "SEARCH MEMORIES..."
 let typewriterInterval: ReturnType<typeof setInterval> | null = null
@@ -17,9 +17,17 @@ export function MemoriesPage() {
   const [search, setSearch] = useState("")
   const [activeDomain, setActiveDomain] = useState<string | null>(null)
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set())
+  const [activeTier, setActiveTier] = useState<number | null>(null)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [typewriterText, setTypewriterText] = useState("")
+
+  const TIER_LABELS = [
+    { tier: 1, label: "Context" },
+    { tier: 2, label: "Anchor" },
+    { tier: 3, label: "Leaf" },
+    { tier: 4, label: "Procedural" },
+  ]
 
   useEffect(() => {
     api.domains().then(setDomains).catch(() => {})
@@ -28,9 +36,10 @@ export function MemoriesPage() {
   const loadMemories = useCallback(
     (reset = false) => {
       const pageNum = reset ? 0 : page
-      const params: { domain?: string; q?: string } = {}
+      const params: { domain?: string; q?: string; tier?: number } = {}
       if (activeDomain) params.domain = activeDomain
       if (search) params.q = search
+      if (activeTier !== null) params.tier = activeTier
       const loader = reset ? setLoading : setLoadingMore
       loader(true)
       api.memories({ ...params, limit: 20, offset: pageNum * 20 } as any)
@@ -40,13 +49,13 @@ export function MemoriesPage() {
         })
         .finally(() => loader(false))
     },
-    [page, activeDomain, search]
+    [page, activeDomain, search, activeTier]
   )
 
   useEffect(() => {
     setPage(0)
     loadMemories(true)
-  }, [activeDomain, search])
+  }, [activeDomain, search, activeTier])
 
   useEffect(() => {
     if (!search && !activeDomain) {
@@ -85,7 +94,7 @@ export function MemoriesPage() {
     })
   }
 
-  const getTierColor = (tier: number) => TIER_COLORS[tier] || TIER_COLORS[0]
+  const getTierColor = (tier: number) => TIER_COLORS[Math.max(0, tier - 1)] ?? TIER_COLORS[0]
 
   return (
     <div className="relative flex h-full min-h-0 bg-[#020d0d] font-mono">
@@ -93,16 +102,16 @@ export function MemoriesPage() {
 
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0 z-0"
-        style={{ background: "radial-gradient(ellipse at 0% 50%, rgba(59, 200, 215,0.06), transparent 40%)" }} />
+        style={{ background: "radial-gradient(ellipse at 0% 50%, rgba(0, 255, 136,0.06), transparent 40%)" }} />
 
       {/* ── Domains sidebar ── */}
       <div
         className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto"
-        style={{ borderRight: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
+        style={{ borderRight: "1px solid rgba(0, 255, 136,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)" }}>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="h-px w-4" style={{ background: "rgba(0, 196, 188,0.4)" }} />
+            <div className="h-px w-4" style={{ background: "rgba(0, 255, 136,0.4)" }} />
             <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60">// FILTER</span>
           </div>
           <div className="text-[11px] uppercase tracking-wider text-neutral-400">Domains</div>
@@ -158,7 +167,7 @@ export function MemoriesPage() {
         </div>
 
         {activeDomain && (
-          <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}>
+          <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0, 255, 136,0.08)" }}>
             <button
               onClick={() => setActiveDomain(null)}
               className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors"
@@ -173,26 +182,59 @@ export function MemoriesPage() {
       <div className="relative z-10 flex-1 flex flex-col min-w-0 px-5 py-5">
 
         {/* Search bar */}
-        <div className="relative mb-5">
+        <div className="relative mb-4">
           <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-400/40"
-            style={{ boxShadow: "0 0 6px rgba(0, 196, 188,0.4)" }} />
+            style={{ boxShadow: "0 0 6px rgba(0, 255, 136,0.4)" }} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={typewriterText || TYPEWRITER_TEXT}
             className="w-full bg-transparent py-2.5 pl-4 pr-24 text-[12px] text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
-            style={{ borderBottom: "1px solid rgba(0, 196, 188,0.2)" }}
-            onFocus={(e) => (e.target.style.borderBottomColor = "rgba(0, 196, 188,0.5)")}
-            onBlur={(e) => (e.target.style.borderBottomColor = "rgba(0, 196, 188,0.2)")}
+            style={{ borderBottom: "1px solid rgba(0, 255, 136,0.2)" }}
+            onFocus={(e) => (e.target.style.borderBottomColor = "rgba(0, 255, 136,0.5)")}
+            onBlur={(e) => (e.target.style.borderBottomColor = "rgba(0, 255, 136,0.2)")}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            {(activeDomain || search) && (
+            {(activeDomain || search || activeTier !== null) && (
               <span className="text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-sm">
                 {memories.length} results
               </span>
             )}
             <span className="text-[8px] text-neutral-700 border border-neutral-800 px-1.5 py-0.5">⌘K</span>
+          </div>
+        </div>
+
+        {/* Tier filter */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[9px] text-neutral-600 uppercase tracking-wider">Tier:</span>
+          <div className="flex gap-1">
+            {TIER_LABELS.map(({ tier, label }) => {
+              const isActive = activeTier === tier
+              const color = TIER_COLORS[tier - 1]
+              return (
+                <button
+                  key={tier}
+                  onClick={() => setActiveTier(isActive ? null : tier)}
+                  className="px-2 py-1 text-[9px] uppercase tracking-wider rounded-sm transition-all"
+                  style={{
+                    color: isActive ? color : "#525252",
+                    background: isActive ? `${color}15` : "transparent",
+                    border: `1px solid ${isActive ? color : "rgba(255,255,255,0.1)"}`,
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+            {activeTier !== null && (
+              <button
+                onClick={() => setActiveTier(null)}
+                className="px-2 py-1 text-[9px] text-neutral-500 hover:text-neutral-300 transition-colors"
+              >
+                ×
+              </button>
+            )}
           </div>
         </div>
 
@@ -260,8 +302,8 @@ export function MemoriesPage() {
                   disabled={loadingMore}
                   className="w-full mt-4 py-2.5 text-[10px] uppercase tracking-widest border transition-all"
                   style={{
-                    borderColor: "rgba(0, 196, 188,0.2)",
-                    color: loadingMore ? "rgba(0, 196, 188,0.3)" : "rgba(0, 196, 188,0.6)",
+                    borderColor: "rgba(0, 255, 136,0.2)",
+                    color: loadingMore ? "rgba(0, 255, 136,0.3)" : "rgba(0, 255, 136,0.6)",
                   }}
                 >
                   {loadingMore ? "LOADING..." : "LOAD MORE"}
@@ -281,11 +323,11 @@ export function MemoriesPage() {
       {/* ── Detail panel ── */}
       <div
         className="hidden 2xl:flex relative z-10 w-64 shrink-0 flex-col overflow-y-auto"
-        style={{ borderLeft: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
+        style={{ borderLeft: "1px solid rgba(0, 255, 136,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)" }}>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="h-px w-4" style={{ background: "rgba(0, 196, 188,0.4)" }} />
+            <div className="h-px w-4" style={{ background: "rgba(0, 255, 136,0.4)" }} />
             <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60">// DETAIL</span>
           </div>
           <div className="text-[11px] uppercase tracking-wider text-neutral-400">Memory Inspector</div>
@@ -317,7 +359,7 @@ export function MemoriesPage() {
               </div>
 
               {selectedMemory.neighbors && selectedMemory.neighbors.length > 0 && (
-                <div className="pt-3" style={{ borderTop: "1px solid rgba(0, 196, 188,0.1)" }}>
+                <div className="pt-3" style={{ borderTop: "1px solid rgba(0, 255, 136,0.1)" }}>
                   <div className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/60 mb-2">// RELATED</div>
                   <div className="space-y-1.5">
                     {selectedMemory.neighbors.slice(0, 5).map((n) => (

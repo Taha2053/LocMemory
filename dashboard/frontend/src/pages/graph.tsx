@@ -7,19 +7,26 @@ import {
   HudBracket,
   ScanlineOverlay,
   HudPanel,
-  BottomStatusBar,
 } from "@/components/hud"
 import { api, type Stats } from "@/lib/api"
 import { RetrievalConsole } from "@/components/RetrievalConsole"
 import { MemoryInspector } from "@/components/MemoryInspector"
-import { MemoryCreator } from "@/components/MemoryCreator"
 import { HebbianPanel } from "@/components/HebbianPanel"
 import { PatternsPanel } from "@/components/PatternsPanel"
 import { DomainsPanel } from "@/components/DomainsPanel"
 
-// Bioluminescent tier palette — matches BrainScene glow colors
+interface RLStatus {
+  enabled: boolean
+  available: boolean
+  model_path?: string
+  candidate_pool_size?: number
+  top_k?: number
+  token_budget?: number
+  message?: string
+}
+
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
-const TIER_RGB    = ["0,255,136", "0,229,255", "170,255,0", "0,255,102"] as const
+const TIER_RGB = ["0,255,136", "0,229,255", "170,255,0", "0,255,102"] as const
 
 const TIER_LABELS = [
   "Core Context",
@@ -37,14 +44,24 @@ const TIER_DESC = [
 
 export function GraphPage() {
   const [selected, setSelected] = useState<string | null>(null)
-  const [stats, setStats]       = useState<Stats | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [uptime, setUptime]     = useState(0)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uptime, setUptime] = useState(0)
 
   useEffect(() => {
     api.stats()
-      .then((data) => { setStats(data); setLoading(false) })
-      .catch(() => { setLoading(false) })
+      .then((data) => {
+        setStats(data)
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+      })
+
+    api.rlStatus()
+      .then((data) => setRlStatus(data))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -61,9 +78,9 @@ export function GraphPage() {
 
   const tierCounts = stats?.tier_counts
     ? [
-        stats.tier_counts["context"]    || 0,
-        stats.tier_counts["anchor"]     || 0,
-        stats.tier_counts["leaf"]       || 0,
+        stats.tier_counts["context"] || 0,
+        stats.tier_counts["anchor"] || 0,
+        stats.tier_counts["leaf"] || 0,
         stats.tier_counts["procedural"] || 0,
       ]
     : [0, 0, 0, 0]
@@ -72,7 +89,7 @@ export function GraphPage() {
   const totalEdges = stats?.edges ?? 0
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-[#020d0d] font-mono">
+    <div className="relative h-full w-full overflow-hidden bg-[#020d0d] font-mono">
       {/* Layer 0: Matrix rain background */}
       <div className="absolute inset-0 z-0">
         <MatrixRain
@@ -84,10 +101,10 @@ export function GraphPage() {
         />
       </div>
 
-      {/* Layer 1: Dark base for contrast */}
+      {/* Layer 1: Dark base */}
       <div className="absolute inset-0 z-[1] bg-[#020d0d]/95" />
 
-      {/* Layer 2: Subtle radial glow corners */}
+      {/* Layer 2: Radial glow */}
       <div
         className="pointer-events-none absolute inset-0 z-[2]"
         style={{
@@ -100,22 +117,204 @@ export function GraphPage() {
         }}
       />
 
-      {/* Layer 10: Brain visualization */}
-      <div className="absolute inset-0 z-10">
-        <BrainScene
-          className="absolute inset-0"
-          selectedId={selected}
-          onNodeSelect={setSelected}
-          showEdges={true}
-        />
+      {/* CSS Grid Layout: [center 1fr] [right 280px] */}
+      <div
+        className="relative z-10 h-full w-full"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 280px",
+          gridTemplateRows: "auto 1fr auto",
+          gap: "8px",
+          padding: "8px",
+        }}
+      >
+        {/* ── Top Status Bar (spans both columns) ── */}
+        <div
+          className="col-span-2 flex items-center justify-center gap-3 py-2 px-4"
+          style={{
+            background: "rgba(0,20,15,0.85)",
+            border: "1px solid rgba(0,255,180,0.15)",
+            borderRadius: "8px",
+          }}
+        >
+          <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/60 flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              SYS
+            </span>
+            <span className="text-emerald-500/30">●</span>
+            <span>NODES: {loading ? "…" : totalNodes}</span>
+            <span className="text-emerald-500/30">●</span>
+            <span>EDGES: {loading ? "…" : totalEdges}</span>
+            <span className="text-emerald-500/30">●</span>
+            <span>UPTIME: {formatUptime(uptime)}</span>
+            <span className="text-emerald-500/30">●</span>
+            <span className={rlStatus?.available ? "text-purple-400" : "text-neutral-600"}>
+              RL: {rlStatus?.available ? "ACTIVE" : rlStatus?.enabled ? "LOADING" : "OFF"}
+            </span>
+            <span className="text-emerald-500/30">●</span>
+            <span>STATUS: NOMINAL</span>
+          </div>
+        </div>
+
+        {/* ── Center Column: Edge Dynamics + Graph + Retrieval Console ── */}
+        <div
+          className="row-span-2 flex flex-col gap-2"
+          style={{
+            display: "grid",
+            gridTemplateRows: "1fr auto",
+            gap: "8px",
+          }}
+        >
+          {/* Top: Edge Dynamics + Cognitive Ops (left) + Graph (right) */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "240px 1fr",
+              gap: "8px",
+            }}
+          >
+            {/* Left: Edge Dynamics + Cognitive Ops (50/50) */}
+            <div
+              className="flex flex-col gap-2"
+              style={{
+                background: "rgba(0,20,15,0.85)",
+                border: "1px solid rgba(0,255,180,0.15)",
+                borderRadius: "8px",
+                padding: "16px",
+              }}
+            >
+              {/* SYS.HBB.06 Header */}
+              <div
+                className="flex items-center justify-between pb-2 mb-2"
+                style={{ borderBottom: "2px solid #009b94" }}
+              >
+                <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                  // SYS.HBB.06
+                </span>
+                <StatusDot label="LIVE" color="#009b94" />
+              </div>
+              <div className="flex-1" style={{ minHeight: "0" }}>
+                <HebbianPanel />
+              </div>
+
+              {/* SYS.PCT.07 Header */}
+              <div
+                className="flex items-center justify-between pb-2 mt-4 mb-2"
+                style={{ borderBottom: "2px solid #a855f7" }}
+              >
+                <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                  // SYS.PCT.07
+                </span>
+                <StatusDot label="IDLE" color="#a855f7" />
+              </div>
+              <div className="flex-1" style={{ minHeight: "0" }}>
+                <PatternsPanel />
+              </div>
+            </div>
+
+            {/* Right: 3D Graph Canvas */}
+            <div
+              className="relative overflow-hidden"
+              style={{
+                background: "rgba(0,20,15,0.85)",
+                border: "1px solid rgba(0,255,180,0.15)",
+                borderRadius: "8px",
+              }}
+            >
+              <BrainScene
+                className="absolute inset-0"
+                selectedId={selected}
+                onNodeSelect={setSelected}
+                showEdges={true}
+              />
+            </div>
+          </div>
+
+          {/* Bottom: Retrieval Console (spans full width of center column) */}
+          <div style={{ minHeight: "180px" }}>
+            <RetrievalConsole onSelect={setSelected} />
+          </div>
+        </div>
+
+        {/* ── Right Column: Memory Tiers + Knowledge Domains (50/50) ── */}
+        <div
+          className="row-span-2 flex flex-col gap-2"
+          style={{
+            background: "rgba(0,20,15,0.85)",
+            border: "1px solid rgba(0,255,180,0.15)",
+            borderRadius: "8px",
+            padding: "16px",
+          }}
+        >
+          {/* SYS.MEM.01 - Memory Tiers (top) */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div
+              className="flex items-center justify-between pb-2 mb-2"
+              style={{ borderBottom: "2px solid #00ff88" }}
+            >
+              <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                // SYS.MEM.01
+              </span>
+              <StatusDot label="ACTIVE" color="#00ff88" />
+            </div>
+            <div className="flex-1 space-y-1.5 overflow-y-auto">
+              {TIER_LABELS.map((label, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2.5 px-2 py-1.5"
+                >
+                  <span
+                    className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: TIER_COLORS[i],
+                      boxShadow: `0 0 8px ${TIER_COLORS[i]}`,
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-500 text-neutral-100">
+                      {label}{" "}
+                      <span className="font-400 text-neutral-500">{TIER_SUB[i]}</span>
+                    </div>
+                    <div className="text-[10px] text-neutral-500 leading-snug">
+                      {TIER_DESC[i]}
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-500 tabular-nums text-neutral-100">
+                    {loading ? (
+                      <span className="text-neutral-600">…</span>
+                    ) : (
+                      <AnimatedNumber value={tierCounts[i]} duration={1200} className="tabular-nums" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* SYS.DOM.04 - Knowledge Domains (bottom) */}
+          <div className="flex-1 flex flex-col min-h-0 mt-4">
+            <div
+              className="flex items-center justify-between pb-2 mb-2"
+              style={{ borderBottom: "2px solid #00e5ff" }}
+            >
+              <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                // SYS.DOM.04
+              </span>
+              <StatusDot label="ACTIVE" color="#00e5ff" />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <DomainsPanel />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Layer 20: Vignette */}
       <div
         className="pointer-events-none absolute inset-0 z-20"
         style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 50%, rgba(0,5,16,0.85) 100%)",
+          background: "radial-gradient(ellipse at center, transparent 50%, rgba(0,5,16,0.85) 100%)",
         }}
       />
 
@@ -126,108 +325,12 @@ export function GraphPage() {
       <HudBracket position="bl" size={48} />
       <HudBracket position="br" size={48} />
 
-      {/* ── Top status bar ── */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
-        <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/60 flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            SYS
-          </span>
-          <span className="separator-pulse">●</span>
-          <span>NODES: {loading ? "…" : totalNodes}</span>
-          <span className="separator-pulse">●</span>
-          <span>EDGES: {loading ? "…" : totalEdges}</span>
-          <span className="separator-pulse">●</span>
-          <span>UPTIME: {formatUptime(uptime)}</span>
-          <span className="separator-pulse">●</span>
-          <span>STATUS: NOMINAL</span>
-        </div>
-      </div>
-
-      {/* ── Left panel: Hebbian edge dynamics ── */}
-      <div className="hidden md:block absolute left-5 top-8 z-30 w-64">
-        <HebbianPanel />
-      </div>
-
-      {/* ── Right panel: Memory Tiers ── */}
-      <div className="hidden md:block absolute top-5 right-5 z-30 w-72 p-4">
-        <HudPanel id="SYS.MEM.01" className="hud-panel" progressValue={78}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-neutral-400">
-              Memory Tiers
-            </div>
-            <StatusDot label="ACTIVE" color="#00ff88" />
-          </div>
-          <div className="space-y-1.5">
-            {TIER_LABELS.map((label, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-2.5 px-2 py-1.5"
-                style={{ "--tier-rgb": TIER_RGB[i] } as React.CSSProperties}
-              >
-                <span
-                  className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full hud-entity-dot"
-                  style={{
-                    backgroundColor: TIER_COLORS[i],
-                    boxShadow: `0 0 8px ${TIER_COLORS[i]}`,
-                    animationDelay: `${i * 0.15}s`,
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-500 text-neutral-100">
-                    {label}{" "}
-                    <span className="font-400 text-neutral-500">{TIER_SUB[i]}</span>
-                  </div>
-                  <div className="text-[10px] text-neutral-500 leading-snug">
-                    {TIER_DESC[i]}
-                  </div>
-                </div>
-                <div className="text-[11px] font-500 tabular-nums text-neutral-100">
-                  {loading ? (
-                    <span className="text-neutral-600">…</span>
-                  ) : (
-                    <AnimatedNumber value={tierCounts[i]} duration={1200} className="tabular-nums" />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </HudPanel>
-      </div>
-
-      {/* ── Right panel: Knowledge Domains (real data) ── */}
-      <div className="hidden md:block absolute top-[340px] right-5 z-30 w-72 p-4">
-        <DomainsPanel />
-      </div>
-
-      {/* ── Right panel: Cognitive Ops (consolidate + detect patterns) ── */}
-      <div className="hidden xl:block absolute top-[555px] right-5 z-30 w-72 p-4">
-        <PatternsPanel />
-      </div>
-
-      {/* ── Bottom left: Memory creator + hint ── */}
-      <div className="absolute bottom-8 left-5 z-30 flex flex-col items-start gap-2">
-        <MemoryCreator
-          onCreated={() => {
-            api.stats().then((data) => setStats(data)).catch(() => {})
-          }}
-        />
-        <div className="pointer-events-none text-[10px] text-neutral-500">
-          click a node to inspect · drag to rotate
-        </div>
-      </div>
-
-      {/* ── Retrieval console (bottom center) ── */}
-      <RetrievalConsole onSelect={setSelected} />
-
-      {/* ── Memory inspector (opens on node select) ── */}
+      {/* Memory inspector */}
       <MemoryInspector
         memoryId={selected}
         onClose={() => setSelected(null)}
         onDeleted={() => setSelected(null)}
       />
-
-      <BottomStatusBar />
     </div>
   )
 }

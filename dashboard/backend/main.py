@@ -43,6 +43,7 @@ state: dict = {
     "hebbian": None,
     "consolidator": None,
     "procedural": None,
+    "rl_agent": None,
     "addition_count": 0,      # triggers consolidation every 30
     "interaction_count": 0,   # triggers procedural detection every 50
 }
@@ -66,12 +67,25 @@ async def lifespan(app: FastAPI):
     consolidator = MemoryConsolidator(gm)
     procedural = ProceduralDetector(gm)
 
+    # Initialize RL agent if enabled
+    rl_agent = None
+    config = get_config()
+    if config.get("rl", "enabled", False):
+        try:
+            from core.rl.agent import RLAgent
+            model_path = config.get("rl", "model_path", "data/rl_agent.zip")
+            rl_agent = RLAgent(model_path)
+            print(f"[rl] agent initialized: available={rl_agent.is_available()}")
+        except Exception as e:
+            print(f"[rl] agent init failed: {e}")
+
     state["gm"]          = gm
     state["classifier"]  = classifier
     state["retriever"]   = retriever
     state["hebbian"]     = hebbian
     state["consolidator"] = consolidator
     state["procedural"]  = procedural
+    state["rl_agent"]    = rl_agent
 
     print(f"[dashboard] loaded graph: {gm.graph.number_of_nodes()} nodes, "
           f"{gm.graph.number_of_edges()} edges")
@@ -156,6 +170,31 @@ def health():
     return {"status": "ok"}
 
 
+# ─────────────────────────── /api/rl ───────────────────────────
+
+@app.get("/api/rl/status")
+def rl_status():
+    """Return RL agent status and configuration."""
+    rl_agent = state.get("rl_agent")
+    config = get_config()
+
+    if rl_agent is None:
+        return {
+            "enabled": config.get("rl", "enabled", False),
+            "available": False,
+            "message": "RL agent not initialized (disabled in config or init failed)",
+        }
+
+    return {
+        "enabled": config.get("rl", "enabled", False),
+        "available": rl_agent.is_available(),
+        "model_path": config.get("rl", "model_path", "data/rl_agent.zip"),
+        "candidate_pool_size": config.get("rl", "candidate_pool_size", 25),
+        "top_k": config.get("rl", "top_k", 5),
+        "token_budget": config.get("rl", "token_budget", 512),
+    }
+
+
 # ─────────────────────────── /api/stats ───────────────────────────
 
 @app.get("/api/stats")
@@ -227,6 +266,7 @@ def list_memories(
     tier: Optional[int] = None,
     q: Optional[str] = None,
     limit: int = Query(200, le=1000),
+    offset: int = Query(0, ge=0),
 ):
     gm: GraphManager = state["gm"]
     results = []
@@ -249,7 +289,7 @@ def list_memories(
             "created_at": data.get("created_at", ""),
         })
     results.sort(key=lambda r: r["created_at"], reverse=True)
-    return results[:limit]
+    return results[offset : offset + limit]
 
 
 @app.post("/api/memories", status_code=201)
@@ -431,11 +471,19 @@ def hebbian_stats():
     gm: GraphManager = state["gm"]
     weights = [data.get("weight", 0.1) for _, _, data in gm.graph.edges(data=True)]
     buckets = [0] * 10
+    active_edges = 0  # "neurons that fire together" - high weight edges
+    strong_edges = 0   # weight > 1.0
     for w in weights:
         buckets[min(int(w / 0.5), 9)] += 1
+        if w >= 0.8:  # Co-activated edges
+            active_edges += 1
+        if w >= 1.0:  # Strong connections
+            strong_edges += 1
 
     return {
         **edge_stats,
+        "active_edges": active_edges,  # edges with weight >= 0.8 (co-activated)
+        "strong_edges": strong_edges,   # edges with weight >= 1.0
         "histogram": [
             {"range": f"{i * 0.5:.1f}–{(i + 1) * 0.5:.1f}", "count": buckets[i]}
             for i in range(10)

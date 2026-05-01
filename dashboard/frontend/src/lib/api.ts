@@ -79,12 +79,14 @@ export const api = {
   stats: (): Promise<Stats> => fetch(`${BASE}/stats`).then((r) => j<Stats>(r)),
   graph: (): Promise<{ nodes: GraphNode[]; links: GraphLink[] }> =>
     fetch(`${BASE}/graph`).then((r) => j(r)),
-  memories: (params?: { domain?: string; subdomain?: string; tier?: number; q?: string }): Promise<Memory[]> => {
+  memories: (params?: { domain?: string; subdomain?: string; tier?: number; q?: string; limit?: number; offset?: number }): Promise<Memory[]> => {
     const qs = new URLSearchParams()
     if (params?.domain) qs.set("domain", params.domain)
     if (params?.subdomain) qs.set("subdomain", params.subdomain)
     if (params?.tier !== undefined) qs.set("tier", String(params.tier))
     if (params?.q) qs.set("q", params.q)
+    if (params?.limit) qs.set("limit", String(params.limit))
+    if (params?.offset) qs.set("offset", String(params.offset))
     const suffix = qs.toString() ? `?${qs}` : ""
     return fetch(`${BASE}/memories${suffix}`).then((r) => j(r))
   },
@@ -124,6 +126,15 @@ export const api = {
   }> => fetch(`${BASE}/hebbian/stats`).then((r) => j(r)),
   hebbianDecay: (): Promise<{ edges_decayed: number }> =>
     fetch(`${BASE}/hebbian/decay`, { method: "POST" }).then((r) => j(r)),
+  rlStatus: (): Promise<{
+    enabled: boolean
+    available: boolean
+    model_path?: string
+    candidate_pool_size?: number
+    top_k?: number
+    token_budget?: number
+    message?: string
+  }> => fetch(`${BASE}/rl/status`).then((r) => j(r)),
   consolidate: (): Promise<{
     clusters_found: number
     anchors_created: number

@@ -3,7 +3,7 @@ import { api, type RetrieveResponse } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { MatrixRain } from "@/components/MatrixRain"
 
-const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"] as const
+const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
   const pct = Math.max(0, Math.min(100, value * 100))
@@ -52,17 +52,17 @@ export function RetrievalPage() {
 
       {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(59, 200, 215,0.08), transparent 50%), radial-gradient(ellipse at 50% 100%, rgba(59, 160, 215,0.06), transparent 50%)" }} />
+        style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(0, 255, 136,0.08), transparent 50%), radial-gradient(ellipse at 50% 100%, rgba(0, 229, 255,0.06), transparent 50%)" }} />
 
       {/* Corner brackets */}
       <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
       <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
       <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
       <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 196, 188,0.5))" }} />
+        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
 
       <div className="relative z-10 max-w-2xl mx-auto px-6 py-8">
 
@@ -73,7 +73,7 @@ export function RetrievalPage() {
             <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.RETRIEVAL</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
-            style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.4)" }}>
+            style={{ textShadow: "0 0 20px rgba(0, 255, 136,0.4)" }}>
             Memory Query Engine
           </h1>
           <p className="mt-1 text-[11px] text-neutral-500 uppercase tracking-wider">
@@ -87,8 +87,8 @@ export function RetrievalPage() {
             style={{
               background: loading
                 ? "linear-gradient(180deg, transparent, #22d3ee, #a855f7, transparent)"
-                : "linear-gradient(180deg, transparent, rgba(0, 196, 188,0.5), transparent)",
-              boxShadow: loading ? "0 0 10px rgba(0, 196, 188,0.6)" : "none",
+                : "linear-gradient(180deg, transparent, rgba(0, 255, 136,0.5), transparent)",
+              boxShadow: loading ? "0 0 10px rgba(0, 255, 136,0.6)" : "none",
               animation: loading ? "pulse 1s ease-in-out infinite" : "none",
             }} />
           <input
@@ -99,16 +99,16 @@ export function RetrievalPage() {
             placeholder="QUERY THE MEMORY GRAPH..."
             disabled={loading}
             className="w-full bg-transparent py-4 pl-4 pr-28 text-base text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
-            style={{ borderBottom: "1px solid rgba(0, 196, 188,0.25)", caretColor: "#22d3ee" }}
+            style={{ borderBottom: "1px solid rgba(0, 255, 136,0.25)", caretColor: "#22d3ee" }}
           />
           <button
             onClick={run}
             disabled={loading || !query.trim()}
             className="absolute right-0 top-1/2 -translate-y-1/2 px-4 py-2 text-[10px] uppercase tracking-widest border transition-all duration-150 disabled:opacity-30"
             style={{
-              borderColor: "rgba(0, 196, 188,0.35)",
-              color: "rgba(0, 196, 188,0.8)",
-              background: loading ? "rgba(0, 196, 188,0.05)" : "transparent",
+              borderColor: "rgba(0, 255, 136,0.35)",
+              color: "rgba(0, 255, 136,0.8)",
+              background: loading ? "rgba(0, 255, 136,0.05)" : "transparent",
             }}
           >
             {loading ? (
@@ -132,10 +132,10 @@ export function RetrievalPage() {
           <div className="space-y-5">
             {/* Result meta bar */}
             <div className="flex items-center gap-4 py-2 text-[10px]"
-              style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
+              style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)" }}>
               <div className="flex items-center gap-1.5">
                 <div className="w-1 h-1 rounded-full bg-emerald-400"
-                  style={{ boxShadow: "0 0 4px rgba(0, 196, 188,0.8)" }} />
+                  style={{ boxShadow: "0 0 4px rgba(0, 255, 136,0.8)" }} />
                 <span className="text-neutral-500 uppercase tracking-wider">
                   DOMAIN: <span className="text-emerald-400">{result.query_domain || "—"}</span>
                 </span>
@@ -145,13 +145,13 @@ export function RetrievalPage() {
                 RESULTS: <span className="text-neutral-300">{result.results.length}</span>
               </span>
               <div className="ml-auto h-0.5 flex-1 max-w-24"
-                style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.4), transparent)" }} />
+                style={{ background: "linear-gradient(to right, rgba(0, 255, 136,0.4), transparent)" }} />
             </div>
 
             {/* Result cards */}
             <div className="space-y-3">
               {result.results.map((r, idx) => {
-                const color = TIER_COLORS[r.tier] || TIER_COLORS[0]
+                const color = TIER_COLORS[Math.max(0, r.tier - 1)] ?? TIER_COLORS[0]
                 return (
                   <div
                     key={r.node_id}
@@ -225,12 +225,12 @@ export function RetrievalPage() {
             <div className="mb-6 relative">
               <div
                 className="w-20 h-20 rounded-full border border-emerald-400/15 flex items-center justify-center"
-                style={{ boxShadow: "0 0 40px rgba(0, 196, 188,0.08)" }}
+                style={{ boxShadow: "0 0 40px rgba(0, 255, 136,0.08)" }}
               >
                 <div className="w-12 h-12 rounded-full border border-emerald-400/20 flex items-center justify-center"
                   style={{ animation: "pulse 3s ease-in-out infinite" }}>
                   <div className="w-2 h-2 rounded-full bg-emerald-500/40"
-                    style={{ boxShadow: "0 0 8px rgba(0, 196, 188,0.6)" }} />
+                    style={{ boxShadow: "0 0 8px rgba(0, 255, 136,0.6)" }} />
                 </div>
               </div>
               {/* Orbit rings */}

@@ -40,12 +40,15 @@ export function PatternsPanel() {
     setFlash(null)
     try {
       const res = await api.consolidate()
-      setFlash(`${res.anchors_created} anchors created`)
+      setFlash(`${res.clusters_found} clusters → ${res.anchors_created} anchors`)
+      await loadPatterns()
+      // Refresh stats to show new anchor nodes
+      api.stats().then(() => {}).catch(() => {})
     } catch {
       setFlash("consolidation failed")
     } finally {
       setConsolidating(false)
-      setTimeout(() => setFlash(null), 3000)
+      setTimeout(() => setFlash(null), 5000)
     }
   }
 

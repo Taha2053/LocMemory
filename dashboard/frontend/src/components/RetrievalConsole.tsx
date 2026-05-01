@@ -2,7 +2,7 @@
 import { api, type RetrievedResult } from "@/lib/api"
 import { HudPanel } from "@/components/hud"
 
-const TIER_COLORS = ["#00c4bc", "#ff8c26", "#ffd700", "#ff4d6d"]
+const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"]
 
 interface Props {
   onSelect: (id: string) => void
@@ -130,12 +130,12 @@ function ScoreBar({ cosine, recency, category }: { cosine: number; recency: numb
   return (
     <div>
       <div className="flex h-1 w-full overflow-hidden rounded-sm bg-neutral-800/60">
-        <div style={{ width: `${c}%`, background: "#00c4bc" }} title={`semantic ${c.toFixed(0)}%`} />
+        <div style={{ width: `${c}%`, background: "#00ff88" }} title={`semantic ${c.toFixed(0)}%`} />
         <div style={{ width: `${r}%`, background: "#ff8c26" }} title={`recency ${r.toFixed(0)}%`} />
         <div style={{ width: `${k}%`, background: "#ffd700" }} title={`category ${k.toFixed(0)}%`} />
       </div>
       <div className="mt-1 flex gap-3 text-[8px] text-neutral-500 uppercase tracking-wider">
-        <span><span style={{ color: "#00c4bc" }}>●</span> sem {c.toFixed(0)}%</span>
+        <span><span style={{ color: "#00ff88" }}>●</span> sem {c.toFixed(0)}%</span>
         <span><span style={{ color: "#ff8c26" }}>●</span> rec {r.toFixed(0)}%</span>
         <span><span style={{ color: "#ffd700" }}>●</span> cat {k.toFixed(0)}%</span>
       </div>

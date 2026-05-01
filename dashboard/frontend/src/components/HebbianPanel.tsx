@@ -8,6 +8,8 @@ interface HebbianStats {
   max_weight: number
   avg_weight: number
   histogram: { range: string; count: number }[]
+  active_edges?: number   // neurons that fire together (weight >= 0.8)
+  strong_edges?: number   // strong connections (weight >= 1.0)
 }
 
 export function HebbianPanel() {
@@ -80,11 +82,12 @@ export function HebbianPanel() {
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-1 mb-2">
+          <div className="grid grid-cols-4 gap-1 mb-2">
             {[
               { label: "edges", value: data.count },
               { label: "avg w", value: (data.avg_weight ?? 0).toFixed(2) },
               { label: "max w", value: (data.max_weight ?? 0).toFixed(2) },
+              { label: "active", value: data.active_edges ?? 0 },  // "neurons that fire together"
             ].map(({ label, value }) => (
               <div key={label} className="border border-emerald-400/10 bg-black/30 px-1.5 py-1 text-center">
                 <div className="text-[8px] uppercase tracking-wider text-neutral-500">{label}</div>
