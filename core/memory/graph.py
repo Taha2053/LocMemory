@@ -60,6 +60,8 @@ class GraphManager:
         existing_cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(nodes)").fetchall()}
         if "subdomain" not in existing_cols:
             self.conn.execute("ALTER TABLE nodes ADD COLUMN subdomain TEXT NOT NULL DEFAULT ''")
+        if "metadata" not in existing_cols:
+            self.conn.execute("ALTER TABLE nodes ADD COLUMN metadata TEXT")
 
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS edges (
