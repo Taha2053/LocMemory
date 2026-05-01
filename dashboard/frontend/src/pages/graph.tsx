@@ -300,11 +300,11 @@ export function GraphPage() {
         </div>
       </div>
 
-      <div className="absolute left-5 top-8 z-10 w-64">
+      <div className="hidden md:block absolute left-5 top-8 z-10 w-64">
         <HebbianPanel />
       </div>
 
-      <div className="absolute left-5 top-1/2 -translate-y-1/2 z-10 w-64">
+      <div className="hidden lg:block absolute left-5 top-1/2 -translate-y-1/2 z-10 w-64">
         <HudPanel id="SYS.LOG.03" className="hud-panel" progressValue={45}>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
@@ -329,7 +329,7 @@ export function GraphPage() {
         </HudPanel>
       </div>
 
-      <div className="absolute top-5 right-5 z-10 w-72 p-4">
+      <div className="hidden md:block absolute top-5 right-5 z-10 w-72 p-4">
         <HudPanel id="SYS.MEM.01" className="hud-panel" progressValue={78}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-[10px] uppercase tracking-widest text-neutral-400">
@@ -409,7 +409,7 @@ export function GraphPage() {
         </HudPanel>
       </div>
 
-      <div className="absolute top-[555px] right-5 z-10 w-72 p-4">
+      <div className="hidden xl:block absolute top-[555px] right-5 z-10 w-72 p-4">
         <PatternsPanel />
       </div>
 

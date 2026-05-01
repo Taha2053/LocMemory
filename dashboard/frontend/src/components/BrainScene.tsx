@@ -10,7 +10,6 @@ import {
   Object3D,
   MathUtils,
   Mesh,
-  BoxGeometry,
   BufferGeometry,
   InstancedMesh,
   MeshBasicMaterial,
@@ -19,6 +18,8 @@ import {
   LineBasicMaterial,
   Float32BufferAttribute,
   WireframeGeometry,
+  PlaneGeometry,
+  CanvasTexture,
   Points,
   PointsMaterial,
 } from "three"
@@ -27,13 +28,40 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import gsap from "gsap"
 import { api } from "@/lib/api"
 
-// Data-viz tier palette — teal / orange / amber / rose
+// Bioluminescent tier palette — emerald / cyan / lime / white-green
 const TIER_PALETTE = [
-  new Color(0x00c4bc), // Core Context — bright teal
-  new Color(0xff8c26), // Anchor Memories — warm orange
-  new Color(0xffd700), // Leaf Memories — amber gold
-  new Color(0xff4d6d), // Procedural — rose red
+  new Color(0x00ff88), // Core Context — deep emerald green
+  new Color(0x00e5ff), // Anchor Memories — teal-cyan
+  new Color(0xaaff00), // Leaf Memories — soft lime
+  new Color(0xffffff), // Procedural — bright green-white
 ]
+
+const TIER_HALO_PALETTE = [
+  new Color(0x00cc66), // Core Context halo
+  new Color(0x0099bb), // Anchor halo
+  new Color(0x66cc00), // Leaf halo
+  new Color(0x00ff66), // Procedural halo
+]
+
+function createGlowTexture(): CanvasTexture {
+  const size = 128
+  const canvas = document.createElement("canvas")
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext("2d")!
+  const half = size / 2
+  // Layered radial gradient: bright core → soft mid → feathered nebula fade
+  const gradient = ctx.createRadialGradient(half, half, 0, half, half, half)
+  gradient.addColorStop(0.00, "rgba(255,255,255,1.0)")
+  gradient.addColorStop(0.12, "rgba(255,255,255,0.92)")
+  gradient.addColorStop(0.30, "rgba(255,255,255,0.55)")
+  gradient.addColorStop(0.55, "rgba(255,255,255,0.18)")
+  gradient.addColorStop(0.78, "rgba(255,255,255,0.05)")
+  gradient.addColorStop(1.00, "rgba(255,255,255,0.00)")
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, size, size)
+  return new CanvasTexture(canvas)
+}
 
 function hashId(str: string): number {
   let h = 0xdeadbeef
@@ -43,7 +71,8 @@ function hashId(str: string): number {
   return (h ^ (h >>> 16)) >>> 0
 }
 
-const MARKER_BASE_SCALE = 1.0
+// Base scale in world units — using unit PlaneGeometry(1,1)
+const MARKER_BASE_SCALE = 0.05
 const ZOOM_DISTANCE = 0.35
 const DEFAULT_CAM_Z = 1.9
 const DEFAULT_CAM_Z_MOBILE = 2.9
@@ -115,60 +144,57 @@ export function BrainScene({
     let brainDots: Points | null = null
     let stars: Points | null = null
 
-    // Memory overlay state
+    // Shared glow texture for all three bloom layers
+    const glowTex = createGlowTexture()
+
+    // Three-layer glow system:
+    //   markersMesh = inner bright core (also hit-tested for raycasting)
+    //   haloMesh    = mid soft halo (~2.5× core)
+    //   bloomMesh   = outer feathered nebula (~6× core)
     let markersMesh: InstancedMesh | null = null
     let haloMesh: InstancedMesh | null = null
+    let bloomMesh: InstancedMesh | null = null
     let edgesLine: LineSegments | null = null
     let nodeIds: string[] = []
     const nodeIndexById = new Map<string, number>()
     const nodePositions: Vector3[] = []
     const nodeTiers: number[] = []
+    // Per-node base scale — hover/selection overrides MARKER_BASE_SCALE
+    const baseScales: number[] = []
     let hoveredIdx = -1
     let prevHoveredIdx = -1
 
     const tmpObj = new Object3D()
 
-    const setMarkerMatrix = (idx: number, scale: number) => {
-      if (!markersMesh) return
-      tmpObj.position.copy(nodePositions[idx])
-      tmpObj.scale.setScalar(scale)
-      tmpObj.updateMatrix()
-      markersMesh.setMatrixAt(idx, tmpObj.matrix)
-    }
-
-    const setHaloMatrix = (idx: number, scale: number) => {
-      if (!haloMesh) return
-      tmpObj.position.copy(nodePositions[idx])
-      tmpObj.scale.setScalar(scale)
-      tmpObj.updateMatrix()
-      haloMesh.setMatrixAt(idx, tmpObj.matrix)
-    }
-
     let prevSelectedIdx = -1
     const applySelection = (id: string | null) => {
       const newIdx = id ? nodeIndexById.get(id) ?? -1 : -1
 
-      if (markersMesh && haloMesh) {
+      if (markersMesh) {
+        // Reset previous selection
         if (prevSelectedIdx >= 0 && prevSelectedIdx !== newIdx) {
-          setMarkerMatrix(prevSelectedIdx, MARKER_BASE_SCALE)
-          setHaloMatrix(prevSelectedIdx, 1.0)
+          baseScales[prevSelectedIdx] = MARKER_BASE_SCALE
           const tIdx = Math.max(0, Math.min(3, nodeTiers[prevSelectedIdx] - 1))
           markersMesh.setColorAt(prevSelectedIdx, TIER_PALETTE[tIdx])
+          if (haloMesh?.instanceColor) haloMesh.setColorAt(prevSelectedIdx, TIER_HALO_PALETTE[tIdx])
+          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(prevSelectedIdx, TIER_HALO_PALETTE[tIdx])
         }
 
+        // Apply new selection — brighter core, larger scale
         if (newIdx >= 0) {
           const tIdx = Math.max(0, Math.min(3, nodeTiers[newIdx] - 1))
           markersMesh.setColorAt(
             newIdx,
             TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.5),
           )
-          setMarkerMatrix(newIdx, MARKER_BASE_SCALE * 1.35)
-          setHaloMatrix(newIdx, 1.6)
+          if (haloMesh?.instanceColor) haloMesh.setColorAt(newIdx, TIER_PALETTE[tIdx])
+          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(newIdx, TIER_PALETTE[tIdx])
+          baseScales[newIdx] = MARKER_BASE_SCALE * 1.35
         }
 
-        markersMesh.instanceMatrix.needsUpdate = true
-        haloMesh.instanceMatrix.needsUpdate = true
         if (markersMesh.instanceColor) markersMesh.instanceColor.needsUpdate = true
+        if (haloMesh?.instanceColor) haloMesh.instanceColor.needsUpdate = true
+        if (bloomMesh?.instanceColor) bloomMesh.instanceColor.needsUpdate = true
 
         prevSelectedIdx = newIdx
       }
@@ -177,7 +203,7 @@ export function BrainScene({
       const focused = newIdx >= 0
       if (brainWireframe) {
         gsap.to(brainWireframe.material as LineBasicMaterial, {
-          opacity: focused ? 0.06 : 0.2,
+          opacity: focused ? 0.06 : 0.15,
           duration: 0.7,
           ease: "power2.out",
         })
@@ -281,16 +307,53 @@ export function BrainScene({
         stars.rotation.x += 0.0001
       }
 
-      // Hover scale on markers
+      // Update hover scale in baseScales
       if (markersMesh && nodeIds.length > 0 && hoveredIdx !== prevHoveredIdx) {
         if (prevHoveredIdx >= 0 && prevHoveredIdx !== prevSelectedIdx) {
-          setMarkerMatrix(prevHoveredIdx, MARKER_BASE_SCALE)
+          baseScales[prevHoveredIdx] = MARKER_BASE_SCALE
         }
         if (hoveredIdx >= 0 && hoveredIdx !== prevSelectedIdx) {
-          setMarkerMatrix(hoveredIdx, MARKER_BASE_SCALE * 1.5)
+          baseScales[hoveredIdx] = MARKER_BASE_SCALE * 1.5
         }
-        markersMesh.instanceMatrix.needsUpdate = true
         prevHoveredIdx = hoveredIdx
+      }
+
+      // Billboard all three glow layers every frame + apply breathing pulse
+      if (markersMesh && nodePositions.length > 0) {
+        // Slow breathing animation ~3s cycle
+        const pulse = 0.92 + 0.08 * Math.sin((Date.now() / 1500) * Math.PI * 2)
+
+        for (let i = 0; i < nodePositions.length; i++) {
+          // Selected and hovered nodes don't pulse — they stay sharp and bright
+          const isFixed = i === prevSelectedIdx || i === hoveredIdx
+          const s = isFixed ? baseScales[i] : baseScales[i] * pulse
+
+          tmpObj.position.copy(nodePositions[i])
+          tmpObj.quaternion.copy(camera.quaternion) // Billboard: always face camera
+
+          // Inner bright core
+          tmpObj.scale.setScalar(s)
+          tmpObj.updateMatrix()
+          markersMesh.setMatrixAt(i, tmpObj.matrix)
+
+          // Mid soft halo (2.5× larger)
+          if (haloMesh) {
+            tmpObj.scale.setScalar(s * 2.5)
+            tmpObj.updateMatrix()
+            haloMesh.setMatrixAt(i, tmpObj.matrix)
+          }
+
+          // Outer feathered bloom (6× larger)
+          if (bloomMesh) {
+            tmpObj.scale.setScalar(s * 6.0)
+            tmpObj.updateMatrix()
+            bloomMesh.setMatrixAt(i, tmpObj.matrix)
+          }
+        }
+
+        markersMesh.instanceMatrix.needsUpdate = true
+        if (haloMesh) haloMesh.instanceMatrix.needsUpdate = true
+        if (bloomMesh) bloomMesh.instanceMatrix.needsUpdate = true
       }
 
       renderer.render(scene, camera)
@@ -303,12 +366,12 @@ export function BrainScene({
       if (disposed) return
       const brainMesh = gltf.scene.children[0] as Mesh
 
-      // ── Wireframe brain mesh ──
+      // ── Wireframe brain mesh (bioluminescent emerald green) ──
       const wireGeo = new WireframeGeometry(brainMesh.geometry)
       const wireMat = new LineBasicMaterial({
-        color: new Color(0x00c4bc),
+        color: new Color(0x00ff88),
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.15,
         depthWrite: false,
       })
       brainWireframe = new LineSegments(wireGeo, wireMat)
@@ -318,8 +381,8 @@ export function BrainScene({
       const dotsGeo = new BufferGeometry()
       dotsGeo.setAttribute("position", brainMesh.geometry.getAttribute("position").clone())
       const dotsMat = new PointsMaterial({
-        color: new Color(0x00c4bc),
-        size: 0.012,
+        color: new Color(0x00ff88),
+        size: 0.010,
         transparent: true,
         opacity: 0.85,
         blending: AdditiveBlending,
@@ -366,6 +429,7 @@ export function BrainScene({
           nodes.forEach((n, i) => {
             nodeIndexById.set(n.id, i)
             nodeTiers.push(n.tier)
+            baseScales.push(MARKER_BASE_SCALE)
             const vIdx = hashId(n.id) % positionCount
             nodePositions.push(
               new Vector3(
@@ -376,50 +440,79 @@ export function BrainScene({
             )
           })
 
-          // Memory markers — wireframe cubes
-          const markerGeom = new WireframeGeometry(new BoxGeometry(0.045, 0.045, 0.045))
-          const markerMat = new MeshBasicMaterial({
-            wireframe: true,
+          // Shared unit plane — actual world size set via scale in animate loop
+          const planeGeom = new PlaneGeometry(1, 1)
+
+          // ── Layer 1: Inner bright core glow (hit-tested for raycasting) ──
+          const coreMat = new MeshBasicMaterial({
+            map: glowTex,
+            color: 0xffffff,
             transparent: true,
             opacity: 1.0,
             blending: AdditiveBlending,
             depthWrite: false,
             toneMapped: false,
           })
-          markersMesh = new InstancedMesh(markerGeom, markerMat, nodes.length)
-          markersMesh.renderOrder = 2
+          markersMesh = new InstancedMesh(planeGeom, coreMat, nodes.length)
+          markersMesh.renderOrder = 3
 
-          for (let i = 0; i < nodes.length; i++) {
-            setMarkerMatrix(i, MARKER_BASE_SCALE)
-            const tierIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
-            markersMesh.setColorAt(i, TIER_PALETTE[tierIdx])
-          }
-          markersMesh.instanceMatrix.needsUpdate = true
-          if (markersMesh.instanceColor) markersMesh.instanceColor.needsUpdate = true
-          scene.add(markersMesh)
-
-          // Halos — soft glow zones
-          const haloGeom = new WireframeGeometry(new BoxGeometry(0.085, 0.085, 0.085))
+          // ── Layer 2: Mid soft halo ──
           const haloMat = new MeshBasicMaterial({
-            wireframe: true,
+            map: glowTex,
+            color: 0xffffff,
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.55,
             blending: AdditiveBlending,
             depthWrite: false,
             toneMapped: false,
           })
-          haloMesh = new InstancedMesh(haloGeom, haloMat, nodes.length)
-          haloMesh.renderOrder = 1.5
+          haloMesh = new InstancedMesh(planeGeom, haloMat, nodes.length)
+          haloMesh.renderOrder = 2
 
+          // ── Layer 3: Outer feathered bloom ──
+          const bloomMat = new MeshBasicMaterial({
+            map: glowTex,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.22,
+            blending: AdditiveBlending,
+            depthWrite: false,
+            toneMapped: false,
+          })
+          bloomMesh = new InstancedMesh(planeGeom, bloomMat, nodes.length)
+          bloomMesh.renderOrder = 1
+
+          // Bootstrap per-instance colors and initial matrices
           for (let i = 0; i < nodes.length; i++) {
-            setHaloMatrix(i, 1.0)
-            const tIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
-            const halo = TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.4)
-            haloMesh.setColorAt(i, halo)
+            const tierIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
+            markersMesh.setColorAt(i, TIER_PALETTE[tierIdx])
+            haloMesh.setColorAt(i, TIER_HALO_PALETTE[tierIdx])
+            bloomMesh.setColorAt(i, TIER_HALO_PALETTE[tierIdx])
+
+            // Initial matrix (billboard orientation set correctly on first animate frame)
+            tmpObj.position.copy(nodePositions[i])
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE)
+            tmpObj.updateMatrix()
+            markersMesh.setMatrixAt(i, tmpObj.matrix)
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 2.5)
+            tmpObj.updateMatrix()
+            haloMesh.setMatrixAt(i, tmpObj.matrix)
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 6.0)
+            tmpObj.updateMatrix()
+            bloomMesh.setMatrixAt(i, tmpObj.matrix)
           }
+
+          markersMesh.instanceMatrix.needsUpdate = true
           haloMesh.instanceMatrix.needsUpdate = true
+          bloomMesh.instanceMatrix.needsUpdate = true
+          if (markersMesh.instanceColor) markersMesh.instanceColor.needsUpdate = true
           if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
+          if (bloomMesh.instanceColor) bloomMesh.instanceColor.needsUpdate = true
+
+          // Add bloom first (back), then halo, then core (front)
+          scene.add(bloomMesh)
           scene.add(haloMesh)
+          scene.add(markersMesh)
 
           if (selectedRef.current) applySelection(selectedRef.current)
 
@@ -474,6 +567,7 @@ export function BrainScene({
       container.removeEventListener("pointerdown", onPointerDown)
       container.removeEventListener("click", onClick)
       controls.dispose()
+      glowTex.dispose()
       if (brainWireframe) {
         brainWireframe.geometry.dispose()
         ;(brainWireframe.material as LineBasicMaterial).dispose()
@@ -493,6 +587,11 @@ export function BrainScene({
         haloMesh.geometry.dispose()
         ;(haloMesh.material as MeshBasicMaterial).dispose()
         scene.remove(haloMesh)
+      }
+      if (bloomMesh) {
+        bloomMesh.geometry.dispose()
+        ;(bloomMesh.material as MeshBasicMaterial).dispose()
+        scene.remove(bloomMesh)
       }
       if (edgesLine) {
         edgesLine.geometry.dispose()
