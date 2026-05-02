@@ -32,6 +32,7 @@ from core.memory import (
 from core.memory.classifier import DEFAULT_SUBDOMAINS
 from core.memory.graph import TIER_NAMES
 from core.settings.config import get_config
+from core.logger import RetrievalLogger, get_logger
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +45,7 @@ state: dict = {
     "consolidator": None,
     "procedural": None,
     "rl_agent": None,
+    "logger": None,
     "addition_count": 0,      # triggers consolidation every 30
     "interaction_count": 0,   # triggers procedural detection every 50
 }
@@ -79,6 +81,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"[rl] agent init failed: {e}")
 
+    log_path = PROJECT_ROOT / "data" / "retrieval_log.csv"
+    retrieval_logger = get_logger(log_path)
+
     state["gm"]          = gm
     state["classifier"]  = classifier
     state["retriever"]   = retriever
@@ -86,6 +91,7 @@ async def lifespan(app: FastAPI):
     state["consolidator"] = consolidator
     state["procedural"]  = procedural
     state["rl_agent"]    = rl_agent
+    state["logger"]      = retrieval_logger
 
     print(f"[dashboard] loaded graph: {gm.graph.number_of_nodes()} nodes, "
           f"{gm.graph.number_of_edges()} edges")
@@ -124,6 +130,10 @@ class MemoryPatch(BaseModel):
 class RetrieveRequest(BaseModel):
     query: str
     limit: int = 10
+
+
+class RateRequest(BaseModel):
+    rating: int   # 1–5
 
 
 class ConfigUpdate(BaseModel):
@@ -440,10 +450,30 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
     """
     Retrieve memories for a query.
     Fires Hebbian update + procedural detection check in background.
+    Logs the retrieval event for quality metrics.
     """
+    import time
     retriever: GraphRetriever = state["retriever"]
+    logger: RetrievalLogger = state["logger"]
+
+    t0 = time.monotonic()
     results = retriever.retrieve(req.query)
+    latency_ms = (time.monotonic() - t0) * 1000
+
     top = results[: req.limit]
+    query_domain = retriever._query_domain
+
+    entry_id = None
+    if logger:
+        try:
+            entry_id = logger.log_retrieval(
+                query=req.query,
+                results=top,
+                query_domain=query_domain,
+                latency_ms=latency_ms,
+            )
+        except Exception as e:
+            print(f"[logger] log_retrieval error: {e}")
 
     retrieved_ids = [r["node_id"] for r in top if "node_id" in r]
     if retrieved_ids:
@@ -452,9 +482,36 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
 
     return {
         "query": req.query,
-        "query_domain": retriever._query_domain,
+        "query_domain": query_domain,
+        "entry_id": entry_id,
         "results": top,
     }
+
+
+@app.post("/api/retrieve/{entry_id}/rate")
+def rate_retrieval(entry_id: str, body: RateRequest):
+    """Attach a 1–5 user rating to a logged retrieval entry."""
+    logger: RetrievalLogger = state["logger"]
+    if not logger:
+        raise HTTPException(503, "Logger not available")
+    if not (1 <= body.rating <= 5):
+        raise HTTPException(422, "rating must be between 1 and 5")
+    found = logger.log_rating(entry_id, body.rating)
+    if not found:
+        raise HTTPException(404, f"entry '{entry_id}' not found in log")
+    return {"ok": True, "entry_id": entry_id, "rating": body.rating}
+
+
+@app.get("/api/metrics")
+def get_metrics(n: int = Query(100, ge=1, le=1000)):
+    """
+    Aggregated retrieval quality metrics for the last *n* log entries.
+    Powers the WK8 metrics panel.
+    """
+    logger: RetrievalLogger = state["logger"]
+    if not logger:
+        raise HTTPException(503, "Logger not available")
+    return logger.get_summary(n)
 
 
 # ─────────────────────────── /api/hebbian ───────────────────────────

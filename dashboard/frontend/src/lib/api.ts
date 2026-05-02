@@ -72,7 +72,30 @@ export interface RetrievedResult {
 export interface RetrieveResponse {
   query: string
   query_domain: string
+  entry_id: string | null
   results: RetrievedResult[]
+}
+
+export interface MetricsSummary {
+  total_retrievals: number
+  avg_result_count: number
+  avg_score: number
+  avg_keyword_overlap: number
+  avg_latency_ms: number
+  precision_at_5: number
+  rated_count: number
+  domain_distribution: Record<string, number>
+  recent: {
+    id: string
+    timestamp: string
+    query: string
+    query_domain: string
+    result_count: number
+    avg_score: number
+    keyword_overlap: number
+    latency_ms: number
+    user_rating: number | null
+  }[]
 }
 
 export const api = {
@@ -152,5 +175,13 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data }),
+    }).then((r) => j(r)),
+  metrics: (n = 100): Promise<MetricsSummary> =>
+    fetch(`${BASE}/metrics?n=${n}`).then((r) => j<MetricsSummary>(r)),
+  rateRetrieval: (entryId: string, rating: number): Promise<{ ok: boolean; entry_id: string; rating: number }> =>
+    fetch(`${BASE}/retrieve/${entryId}/rate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating }),
     }).then((r) => j(r)),
 }

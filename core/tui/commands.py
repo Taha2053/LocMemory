@@ -66,6 +66,8 @@ class CommandHandler:
             "help":       self._cmd_help,
             "run":        self._cmd_run,
             "stop":       self._cmd_stop,
+            "activate":   self._cmd_activate,
+            "deactivate": self._cmd_deactivate,
             "mem":        self._cmd_mem,
             "dashboard":  self._cmd_dashboard,
             "exit":       self._cmd_exit,
@@ -96,14 +98,15 @@ class CommandHandler:
 
         rows = [
             ("help",              "show this help"),
-            ("run",              "start chat interface"),
-            ("stop",             "stop chat interface"),
-            ("mem",             "show memory statistics"),
-            ("dashboard",        "open dashboard (not implemented yet)"),
-            ("exit | quit",      "leave the chat"),
-            ("clear",            "clear the screen"),
-            ("stats",           "show graph statistics"),
-            ("list [category]",  "list memories"),
+            ("activate",          "enable background memory extraction"),
+            ("deactivate",        "pause background memory extraction"),
+            ("run",               "alias for /activate"),
+            ("stop",              "alias for /deactivate"),
+            ("mem",               "show memory statistics"),
+            ("stats",             "show graph statistics (tiers + domains)"),
+            ("list [category]",   "list memories, optionally filtered by domain"),
+            ("clear",             "clear the screen"),
+            ("exit | quit",       "leave the chat"),
         ]
         for cmd, desc in rows:
             table.add_row(cmd, desc)
