@@ -185,4 +185,17 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rating }),
     }).then((r) => j(r)),
+  compareRetrieve: (query: string, limit = 5): Promise<{
+    query: string
+    query_domain: string
+    rl_available: boolean
+    hybrid: RetrievedResult[]
+    rl: RetrievedResult[]
+    overlap_count: number
+  }> =>
+    fetch(`${BASE}/retrieve/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, limit }),
+    }).then((r) => j(r)),
 }

@@ -15,6 +15,15 @@ interface RLStatus {
   message?: string
 }
 
+interface CompareResult {
+  query: string
+  query_domain: string
+  rl_available: boolean
+  hybrid: api.RetrievedResult[]
+  rl: api.RetrievedResult[]
+  overlap_count: number
+}
+
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
   const pct = Math.max(0, Math.min(100, value * 100))
   return (
@@ -31,26 +40,26 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
   )
 }
 
-function ResultCard({ r, idx, rejected = false }: { r: api.RetrievedResult; idx: number; rejected?: boolean }) {
+function ResultCard({ r, idx, rejected = false, compact = false }: { r: api.RetrievedResult; idx: number; rejected?: boolean; compact?: boolean }) {
   const color = TIER_COLORS[Math.max(0, r.tier - 1)] ?? TIER_COLORS[0]
   const borderColor = rejected ? "rgba(255,77,109,0.4)" : color
 
   return (
     <div
-      className={`relative rounded-sm overflow-hidden transition-all duration-200 ${rejected ? "opacity-40 cursor-not-allowed" : "hover:scale-[1.003]"}`}
+      className={`relative rounded-sm overflow-hidden transition-all duration-200 ${rejected ? "opacity-40 cursor-not-allowed" : compact ? "" : "hover:scale-[1.003]"}`}
       style={{
         background: "rgba(0,5,16,0.7)",
         border: "1px solid rgba(255,255,255,0.05)",
         borderLeft: `2px solid ${borderColor}`,
       }}
       onMouseEnter={(e) => {
-        if (rejected) return
+        if (rejected || compact) return
         (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${color}18`
         ;(e.currentTarget as HTMLElement).style.borderColor = `${color}30`
         ;(e.currentTarget as HTMLElement).style.borderLeftColor = color
       }}
       onMouseLeave={(e) => {
-        if (rejected) return
+        if (rejected || compact) return
         (e.currentTarget as HTMLElement).style.boxShadow = "none"
         ;(e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.05)"
         ;(e.currentTarget as HTMLElement).style.borderLeftColor = color
@@ -65,8 +74,8 @@ function ResultCard({ r, idx, rejected = false }: { r: api.RetrievedResult; idx:
         </div>
       )}
 
-      <div className="flex gap-4 p-4">
-        <div className="text-[22px] font-bold text-neutral-800 shrink-0 tabular-nums leading-none mt-1">
+      <div className={`flex gap-4 ${compact ? "p-2" : "p-4"}`}>
+        <div className={`font-bold text-neutral-800 shrink-0 tabular-nums leading-none mt-1 ${compact ? "text-[14px]" : "text-[22px]"}`}>
           {String(idx + 1).padStart(2, "0")}
         </div>
 
@@ -76,21 +85,112 @@ function ResultCard({ r, idx, rejected = false }: { r: api.RetrievedResult; idx:
               style={{ color, background: `${color}15` }}>
               {r.domain || "—"}
             </span>
-            {r.subdomain && (
-              <>
-                <span className="text-neutral-700 text-[9px]">›</span>
-                <span className="text-[9px] text-neutral-600">{r.subdomain}</span>
-              </>
-            )}
           </div>
 
-          <p className="text-[11px] text-neutral-300 line-clamp-3 leading-relaxed mb-3">{r.text}</p>
+          <p className={`text-neutral-300 leading-relaxed mb-3 ${compact ? "text-[10px] line-clamp-2" : "text-[11px] line-clamp-3"}`}>{r.text}</p>
 
-          <div className="space-y-1.5">
-            <ScoreBar label="COSINE" value={r.cosine_contribution} color="#3b82f6" />
-            <ScoreBar label="RECENCY" value={r.recency_contribution} color="#009b94" />
-            <ScoreBar label="CATEGORY" value={r.category_contribution} color="#a855f7" />
+          {!compact && (
+            <div className="space-y-1.5">
+              <ScoreBar label="COSINE" value={r.cosine_contribution} color="#3b82f6" />
+              <ScoreBar label="RECENCY" value={r.recency_contribution} color="#009b94" />
+              <ScoreBar label="CATEGORY" value={r.category_contribution} color="#a855f7" />
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0">
+          <span className="text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-sm"
+            style={{ color, background: `${color}18`, border: `1px solid ${color}25` }}>
+            {r.score.toFixed(3)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CompareView({ result, loading: compareLoading }: { result: CompareResult; loading: boolean }) {
+  const hybridIds = new Set(result.hybrid.map(r => r.node_id))
+  const rlIds = new Set(result.rl.map(r => r.node_id))
+
+  const getStatus = (nodeId: string): "overlap" | "hybrid" | "rl" => {
+    const inHybrid = hybridIds.has(nodeId)
+    const inRl = rlIds.has(nodeId)
+    if (inHybrid && inRl) return "overlap"
+    if (inHybrid) return "hybrid"
+    return "rl"
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider" style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)", paddingBottom: "8px" }}>
+        <span className="text-amber-400">●</span>
+        <span className="text-neutral-500">DOMAIN: <span className="text-amber-400">{result.query_domain || "—"}</span></span>
+        <span className="text-neutral-500 ml-4">OVERLAP: <span className="text-emerald-400">{result.overlap_count}/5</span></span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-2 w-2 rounded-full bg-amber-400" style={{ boxShadow: "0 0 4px rgba(251, 191, 36, 0.6)" }} />
+            <span className="text-[10px] uppercase tracking-wider text-amber-400">HYBRID SCORING</span>
           </div>
+          <div className="space-y-2">
+            {result.hybrid.map((r, idx) => {
+              const status = getStatus(r.node_id)
+              return (
+                <div
+                  key={r.node_id}
+                  className="relative"
+                  style={{
+                    boxShadow: status === "overlap" ? "0 0 12px rgba(0, 255, 136, 0.2)" : status === "hybrid" ? "0 0 8px rgba(251, 191, 36, 0.15)" : "none",
+                    borderRadius: "4px",
+                  }}
+                >
+                  {status === "overlap" && (
+                    <div className="absolute -left-2 top-1/2 -translate-y-1/2 text-emerald-400 text-[10px]">✦</div>
+                  )}
+                  <ResultCard r={r} idx={idx} compact />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`h-2 w-2 rounded-full ${result.rl_available ? "bg-emerald-400" : "bg-neutral-600"}`}
+              style={{ boxShadow: result.rl_available ? "0 0 4px rgba(0, 255, 136, 0.6)" : "none" }} />
+            <span className={`text-[10px] uppercase tracking-wider ${result.rl_available ? "text-emerald-400" : "text-neutral-600"}`}>
+              RL AGENT {result.rl_available ? "" : "(NOT AVAILABLE)"}
+            </span>
+          </div>
+          {result.rl_available ? (
+            <div className="space-y-2">
+              {result.rl.map((r, idx) => {
+                const status = getStatus(r.node_id)
+                return (
+                  <div
+                    key={r.node_id}
+                    className="relative"
+                    style={{
+                      boxShadow: status === "overlap" ? "0 0 12px rgba(0, 255, 136, 0.2)" : status === "rl" ? "0 0 8px rgba(0, 255, 136, 0.15)" : "none",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    {status === "overlap" && (
+                      <div className="absolute -left-2 top-1/2 -translate-y-1/2 text-emerald-400 text-[10px]">✦</div>
+                    )}
+                    <ResultCard r={r} idx={idx} compact />
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-[10px] text-neutral-700 uppercase tracking-wider py-4 text-center">
+              RL AGENT DISABLED — SHOWING SAME RESULTS
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -104,6 +204,9 @@ export function RetrievalPage() {
   const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
   const [includeRejected, setIncludeRejected] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
+  const [mode, setMode] = useState<"single" | "compare">("single")
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null)
+  const [compareLoading, setCompareLoading] = useState(false)
 
   useEffect(() => {
     api.rlStatus()
@@ -122,11 +225,22 @@ export function RetrievalPage() {
     }
   }
 
+  const runCompare = async () => {
+    if (!query.trim()) return
+    setCompareLoading(true)
+    try {
+      const res = await api.compareRetrieve(query.trim(), 5)
+      setCompareResult(res)
+    } finally {
+      setCompareLoading(false)
+    }
+  }
+
   return (
     <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
       <ScanlineOverlay />
 
-      {loading && (
+      {(loading || compareLoading) && (
         <MatrixRain
           className="absolute inset-0 h-full w-full pointer-events-none z-[1]"
           opacity={0.08}
@@ -146,7 +260,7 @@ export function RetrievalPage() {
       <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-emerald-400/40"
         style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
 
-      <div className="relative z-10 max-w-2xl mx-auto px-6 py-8">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-8">
 
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
@@ -175,27 +289,52 @@ export function RetrievalPage() {
           </div>
         </div>
 
-        <div className="relative mb-8">
+        <div className="relative mb-6">
           <div className="absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300"
             style={{
-              background: loading
+              background: loading || compareLoading
                 ? "linear-gradient(180deg, transparent, #22d3ee, #a855f7, transparent)"
                 : "linear-gradient(180deg, transparent, rgba(0, 255, 136,0.5), transparent)",
-              boxShadow: loading ? "0 0 10px rgba(0, 255, 136,0.6)" : "none",
-              animation: loading ? "pulse 1s ease-in-out infinite" : "none",
+              boxShadow: loading || compareLoading ? "0 0 10px rgba(0, 255, 136,0.6)" : "none",
+              animation: loading || compareLoading ? "pulse 1s ease-in-out infinite" : "none",
             }} />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && run()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (mode === "compare") runCompare()
+                else run()
+              }
+            }}
             placeholder="QUERY THE MEMORY GRAPH..."
-            disabled={loading}
-            className="w-full bg-transparent py-4 pl-4 pr-28 text-base text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
+            disabled={loading || compareLoading}
+            className="w-full bg-transparent py-4 pl-4 pr-52 text-base text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
             style={{ borderBottom: "1px solid rgba(0, 255, 136,0.25)", caretColor: "#22d3ee" }}
           />
-          <div className="absolute right-20 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            {rlStatus?.available && (
+          <div className="absolute right-36 top-1/2 -translate-y-1/2 flex items-center gap-4">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setMode("single")}
+                className={`px-3 py-1.5 text-[9px] uppercase tracking-wider rounded-sm transition-all ${
+                  mode === "single" ? "text-emerald-300 bg-emerald-300/10 border border-emerald-300/30" : "text-neutral-600 hover:text-neutral-400 border border-transparent"
+                }`}
+              >
+                SINGLE
+              </button>
+              {rlStatus?.available && (
+                <button
+                  onClick={() => setMode("compare")}
+                  className={`px-3 py-1.5 text-[9px] uppercase tracking-wider rounded-sm transition-all ${
+                    mode === "compare" ? "text-emerald-300 bg-emerald-300/10 border border-emerald-300/30" : "text-neutral-600 hover:text-neutral-400 border border-transparent"
+                  }`}
+                >
+                  COMPARE
+                </button>
+              )}
+            </div>
+            {mode === "single" && rlStatus?.available && (
               <label className="flex items-center gap-1.5 cursor-pointer group">
                 <input
                   type="checkbox"
@@ -215,16 +354,16 @@ export function RetrievalPage() {
             )}
           </div>
           <button
-            onClick={run}
-            disabled={loading || !query.trim()}
+            onClick={mode === "compare" ? runCompare : run}
+            disabled={loading || compareLoading || !query.trim()}
             className="absolute right-0 top-1/2 -translate-y-1/2 px-4 py-2 text-[10px] uppercase tracking-widest border transition-all duration-150 disabled:opacity-30"
             style={{
               borderColor: "rgba(0, 255, 136,0.35)",
               color: "rgba(0, 255, 136,0.8)",
-              background: loading ? "rgba(0, 255, 136,0.05)" : "transparent",
+              background: loading || compareLoading ? "rgba(0, 255, 136,0.05)" : "transparent",
             }}
           >
-            {loading ? (
+            {loading || compareLoading ? (
               <span className="flex items-center gap-2">
                 <span className="inline-flex gap-1">
                   {[0, 150, 300].map((delay) => (
@@ -240,7 +379,7 @@ export function RetrievalPage() {
           </button>
         </div>
 
-        {result && (
+        {mode === "single" && result && (
           <div className="space-y-5">
             <div className="flex items-center gap-4 py-2 text-[10px]"
               style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)" }}>
@@ -297,7 +436,11 @@ export function RetrievalPage() {
           </div>
         )}
 
-        {!result && !loading && (
+        {mode === "compare" && compareResult && (
+          <CompareView result={compareResult} loading={compareLoading} />
+        )}
+
+        {!result && !compareResult && !loading && !compareLoading && (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="mb-6 relative">
               <div

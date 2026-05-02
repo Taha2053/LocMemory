@@ -33,6 +33,7 @@ from core.memory.classifier import DEFAULT_SUBDOMAINS
 from core.memory.graph import TIER_NAMES
 from core.settings.config import get_config
 from core.logger import RetrievalLogger, get_logger
+from core.security.security import get_encryptor
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -46,9 +47,25 @@ state: dict = {
     "procedural": None,
     "rl_agent": None,
     "logger": None,
+    "encryptor": None,
     "addition_count": 0,      # triggers consolidation every 30
     "interaction_count": 0,   # triggers procedural detection every 50
 }
+
+
+def _memory_dict(nid, data, encryptor):
+    text = data.get("text", "")
+    encrypted = encryptor.is_encrypted(text) if encryptor else False
+    return {
+        "id": nid,
+        "text": text,
+        "tier": data.get("tier", 3),
+        "tier_name": TIER_NAMES.get(data.get("tier", 0), "?"),
+        "domain": data.get("domain", ""),
+        "subdomain": data.get("subdomain", ""),
+        "created_at": data.get("created_at", ""),
+        "is_encrypted": encrypted,
+    }
 
 
 @asynccontextmanager
@@ -92,6 +109,7 @@ async def lifespan(app: FastAPI):
     state["procedural"]  = procedural
     state["rl_agent"]    = rl_agent
     state["logger"]      = retrieval_logger
+    state["encryptor"]   = get_encryptor()
 
     print(f"[dashboard] loaded graph: {gm.graph.number_of_nodes()} nodes, "
           f"{gm.graph.number_of_edges()} edges")
@@ -280,6 +298,7 @@ def list_memories(
     offset: int = Query(0, ge=0),
 ):
     gm: GraphManager = state["gm"]
+    encryptor = state.get("encryptor")
     results = []
     for nid, data in gm.graph.nodes(data=True):
         if domain and data.get("domain") != domain:
@@ -290,15 +309,7 @@ def list_memories(
             continue
         if q and q.lower() not in str(data.get("text", "")).lower():
             continue
-        results.append({
-            "id": nid,
-            "text": data.get("text", ""),
-            "tier": data.get("tier", 3),
-            "tier_name": TIER_NAMES.get(data.get("tier", 0), "?"),
-            "domain": data.get("domain", ""),
-            "subdomain": data.get("subdomain", ""),
-            "created_at": data.get("created_at", ""),
-        })
+        results.append(_memory_dict(nid, data, encryptor))
     results.sort(key=lambda r: r["created_at"], reverse=True)
     return results[offset : offset + limit]
 
@@ -349,16 +360,9 @@ def create_memory(body: MemoryCreate, background_tasks: BackgroundTasks):
     background_tasks.add_task(_hebbian_bg, [node_id])
     background_tasks.add_task(_maybe_consolidate)
 
-    created_at = gm.graph.nodes[node_id].get("created_at", "")
-    return {
-        "id": node_id,
-        "text": text,
-        "tier": tier,
-        "tier_name": TIER_NAMES.get(tier, "?"),
-        "domain": domain,
-        "subdomain": subdomain,
-        "created_at": created_at,
-    }
+    encryptor = state.get("encryptor")
+    data = gm.graph.nodes[node_id]
+    return _memory_dict(node_id, data, encryptor)
 
 
 @app.get("/api/memories/{node_id}")
@@ -367,25 +371,19 @@ def get_memory(node_id: str):
     if node_id not in gm.graph:
         raise HTTPException(404, "memory not found")
     data = gm.graph.nodes[node_id]
+    encryptor = state.get("encryptor")
     neighbors = gm.get_neighbors(node_id, direction="both")
-    return {
-        "id": node_id,
-        "text": data.get("text", ""),
-        "tier": data.get("tier", 3),
-        "tier_name": TIER_NAMES.get(data.get("tier", 0), "?"),
-        "domain": data.get("domain", ""),
-        "subdomain": data.get("subdomain", ""),
-        "created_at": data.get("created_at", ""),
-        "neighbors": [
-            {
-                "id": n["id"],
-                "text": n.get("text", ""),
-                "relation": n.get("edge_relation"),
-                "weight": n.get("edge_weight"),
-            }
-            for n in neighbors
-        ],
-    }
+    result = _memory_dict(node_id, data, encryptor)
+    result["neighbors"] = [
+        {
+            "id": n["id"],
+            "text": n.get("text", ""),
+            "relation": n.get("edge_relation"),
+            "weight": n.get("edge_weight"),
+        }
+        for n in neighbors
+    ]
+    return result
 
 
 @app.patch("/api/memories/{node_id}")
@@ -402,6 +400,20 @@ def delete_memory(node_id: str):
     if not gm.delete_node(node_id):
         raise HTTPException(404, "memory not found")
     return {"deleted": node_id}
+
+
+@app.post("/api/memories/{node_id}/decrypt")
+def decrypt_memory(node_id: str):
+    """Decrypt a memory's text for display-only (does not modify stored data)."""
+    gm: GraphManager = state["gm"]
+    encryptor = state.get("encryptor")
+    if node_id not in gm.graph:
+        raise HTTPException(404, "memory not found")
+    text = gm.graph.nodes[node_id].get("text", "")
+    if encryptor and encryptor.is_encrypted(text):
+        decrypted = encryptor.decrypt(text)
+        return {"text": decrypted}
+    return {"text": text}
 
 
 # ─────────────────────────── /api/domains ───────────────────────────
@@ -458,17 +470,23 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
     retriever: GraphRetriever = state["retriever"]
     logger: RetrievalLogger = state["logger"]
     rl_agent = state.get("rl_agent")
+    encryptor = state.get("encryptor")
 
     t0 = time.monotonic()
     results = retriever.retrieve(req.query)
     latency_ms = (time.monotonic() - t0) * 1000
 
-    top = results[: req.limit]
+    def add_encrypted(item):
+        text = item.get("text", "")
+        item["is_encrypted"] = encryptor.is_encrypted(text) if encryptor else False
+        return item
+
+    top = [add_encrypted(r) for r in results[: req.limit]]
     query_domain = retriever._query_domain
 
     rejected = []
     if req.include_rejected and rl_agent and rl_agent.is_available():
-        rejected = results[req.limit: min(len(results), 25)]
+        rejected = [add_encrypted(r) for r in results[req.limit: min(len(results), 25)]]
 
     entry_id = None
     if logger:
@@ -493,6 +511,60 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
         "entry_id": entry_id,
         "results": top,
         "rejected": rejected,
+    }
+
+
+class CompareRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+
+@app.post("/api/retrieve/compare")
+def retrieve_compare(req: CompareRequest):
+    """
+    Run retrieval in both Hybrid and RL modes for side-by-side comparison.
+    """
+    retriever: GraphRetriever = state["retriever"]
+    rl_agent = state.get("rl_agent")
+
+    rl_available = rl_agent is not None and rl_agent.is_available()
+
+    if not rl_available:
+        results = retriever.retrieve(req.query)
+        top = results[: req.limit]
+        return {
+            "query": req.query,
+            "query_domain": retriever._query_domain,
+            "rl_available": False,
+            "hybrid": top,
+            "rl": top,
+            "overlap_count": len(top),
+        }
+
+    original_rl = retriever._rl_agent
+
+    try:
+        retriever._rl_agent = None
+        hybrid_results = retriever.retrieve(req.query)
+        hybrid = hybrid_results[: req.limit]
+    finally:
+        retriever._rl_agent = original_rl
+
+    retriever._rl_agent = original_rl
+    rl_results = retriever.retrieve(req.query)
+    rl = rl_results[: req.limit]
+
+    hybrid_ids = set(r.get("node_id") for r in hybrid if r.get("node_id"))
+    rl_ids = set(r.get("node_id") for r in rl if r.get("node_id"))
+    overlap_count = len(hybrid_ids & rl_ids)
+
+    return {
+        "query": req.query,
+        "query_domain": retriever._query_domain,
+        "rl_available": True,
+        "hybrid": hybrid,
+        "rl": rl,
+        "overlap_count": overlap_count,
     }
 
 

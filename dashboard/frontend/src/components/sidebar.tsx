@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import { api, type Stats } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { AnimatedNumber } from "@/components/hud"
+import { usePrivacy } from "@/lib/privacy"
 
 const links = [
   { to: "/graph",     label: "Graph",     icon: Network,    id: "01", desc: "Neural map" },
