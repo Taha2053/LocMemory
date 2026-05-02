@@ -1,10 +1,7 @@
 ﻿import { NavLink } from "react-router-dom"
 import { Network, FileText, FolderTree, Search, Settings, BarChart2 } from "lucide-react"
-import { useEffect, useState, useRef } from "react"
-import { api, type Stats } from "@/lib/api"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { AnimatedNumber } from "@/components/hud"
-import { usePrivacy } from "@/lib/privacy"
 
 const links = [
   { to: "/graph",     label: "Graph",     icon: Network,    id: "01", desc: "Neural map" },
@@ -15,125 +12,13 @@ const links = [
   { to: "/settings",  label: "Settings",  icon: Settings,   id: "06", desc: "Config" },
 ]
 
-function NeuralPulse() {
-  return (
-    <div className="px-4 py-4">
-      <div className="text-[8px] uppercase tracking-[0.25em] text-neutral-600 mb-3">
-        // NEURAL ACTIVITY
-      </div>
-      <div className="relative h-10 w-full overflow-hidden rounded-sm"
-        style={{ background: "rgba(0, 196, 188,0.04)", border: "1px solid rgba(0, 196, 188,0.1)" }}>
-        <NeuralWaveform />
-      </div>
-      <div className="mt-2 flex items-center justify-between text-[8px] text-neutral-700 uppercase tracking-wider">
-        <span>SIGNAL</span>
-        <span className="text-emerald-600/60 tabular-nums">ACTIVE</span>
-      </div>
-    </div>
-  )
-}
-
-function NeuralWaveform() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const frameRef = useRef<number>(0)
-  const offsetRef = useRef<number>(0)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    const draw = () => {
-      const w = canvas.width
-      const h = canvas.height
-      ctx.clearRect(0, 0, w, h)
-
-      offsetRef.current += 0.04
-
-      ctx.beginPath()
-      ctx.strokeStyle = "rgba(0, 196, 188, 0.75)"
-      ctx.lineWidth = 1.5
-      ctx.shadowColor = "rgba(0, 196, 188, 0.8)"
-      ctx.shadowBlur = 4
-
-      for (let x = 0; x <= w; x += 2) {
-        const t = (x / w) * Math.PI * 6 + offsetRef.current
-        const y = h / 2 + Math.sin(t) * 8 + Math.sin(t * 2.3 + 1) * 4
-        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-
-      // dim secondary wave — orange
-      ctx.beginPath()
-      ctx.strokeStyle = "rgba(255, 140, 38, 0.35)"
-      ctx.lineWidth = 1
-      ctx.shadowBlur = 0
-      for (let x = 0; x <= w; x += 2) {
-        const t = (x / w) * Math.PI * 4 + offsetRef.current * 0.7 + 2
-        const y = h / 2 + Math.sin(t) * 5 + Math.cos(t * 1.7) * 3
-        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-
-      frameRef.current = requestAnimationFrame(draw)
-    }
-
-    draw()
-    return () => cancelAnimationFrame(frameRef.current)
-  }, [])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={176}
-      height={40}
-      className="absolute inset-0 h-full w-full"
-    />
-  )
-}
-
 export function Sidebar() {
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [prevStats, setPrevStats] = useState<Stats | null>(null)
-  const [flashing, setFlashing] = useState({ nodes: false, edges: false, domains: false })
   const [tick, setTick] = useState(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const fetchStats = async () => {
-    try {
-      const data = await api.stats()
-      setPrevStats(stats)
-      setStats(data)
-    } catch (e) {
-      console.error("Failed to fetch stats", e)
-    }
-  }
-
-  useEffect(() => {
-    fetchStats()
-    intervalRef.current = setInterval(fetchStats, 10000)
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [])
 
   useEffect(() => {
     const t = setInterval(() => setTick(p => p + 1), 1000)
     return () => clearInterval(t)
   }, [])
-
-  useEffect(() => {
-    if (prevStats && stats) {
-      const n = stats.nodes !== prevStats.nodes
-      const e = stats.edges !== prevStats.edges
-      const d = Object.keys(stats.domain_counts).length !== Object.keys(prevStats.domain_counts).length
-      if (n || e || d) {
-        setFlashing({ nodes: n, edges: e, domains: d })
-        setTimeout(() => setFlashing({ nodes: false, edges: false, domains: false }), 600)
-      }
-    }
-  }, [stats, prevStats])
-
-  const domainCount = stats?.domain_counts ? Object.keys(stats.domain_counts).length : 0
 
   const hh = String(Math.floor(tick / 3600)).padStart(2, "0")
   const mm = String(Math.floor((tick % 3600) / 60)).padStart(2, "0")
@@ -305,56 +190,8 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Neural activity waveform ── */}
-      <div className="flex-1 flex flex-col justify-center">
-        <NeuralPulse />
-      </div>
-
-      {/* ── Stats ── */}
-      <div
-        className="px-4 py-3"
-        style={{ borderTop: "1px solid rgba(0, 196, 188,0.1)" }}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.3), transparent)" }} />
-          <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-700/60">METRICS</span>
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(0, 196, 188,0.3), transparent)" }} />
-        </div>
-
-        <div className="space-y-1.5">
-          {[
-            { label: "NODES",   value: stats?.nodes,           flash: flashing.nodes,   color: "#00c4bc" },
-            { label: "EDGES",   value: stats?.edges,           flash: flashing.edges,   color: "#ff8c26" },
-            { label: "DOMAINS", value: domainCount || null,    flash: flashing.domains, color: "#ffd700" },
-          ].map(({ label, value, flash, color }) => (
-            <div
-              key={label}
-              className={cn(
-                "relative flex items-center justify-between px-2 py-1.5 rounded-sm transition-all duration-300"
-              )}
-              style={{ background: flash ? `rgba(0, 196, 188, 0.05)` : undefined }}
-            >
-              {/* color accent */}
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded-full"
-                style={{ background: color, boxShadow: `0 0 5px ${color}` }} />
-              <span className="pl-2 text-[9px] uppercase tracking-wider text-neutral-600">{label}</span>
-              <span
-                className="text-[12px] font-semibold tabular-nums"
-                style={{
-                  color: flash ? "#00c4bc" : color,
-                  textShadow: flash ? `0 0 10px rgba(0, 196, 188,0.9)` : `0 0 8px ${color}80`,
-                }}
-              >
-                {value != null
-                  ? typeof value === "number"
-                    ? <AnimatedNumber value={value} duration={500} />
-                    : value
-                  : <span className="text-neutral-700 text-[10px]">—</span>}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* spacer */}
+      <div className="flex-1" />
 
       {/* ── Footer ── */}
       <div
