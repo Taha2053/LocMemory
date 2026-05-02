@@ -1,5 +1,5 @@
 ﻿import { NavLink } from "react-router-dom"
-import { Network, FileText, FolderTree, Search, Settings } from "lucide-react"
+import { Network, FileText, FolderTree, Search, Settings, BarChart2 } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { api, type Stats } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -10,7 +10,8 @@ const links = [
   { to: "/memories",  label: "Memories",  icon: FileText,   id: "02", desc: "Memory store" },
   { to: "/domains",   label: "Domains",   icon: FolderTree, id: "03", desc: "Knowledge tree" },
   { to: "/retrieval", label: "Retrieval", icon: Search,     id: "04", desc: "Query engine" },
-  { to: "/settings",  label: "Settings",  icon: Settings,   id: "05", desc: "Config" },
+  { to: "/metrics",   label: "Metrics",    icon: BarChart2,  id: "05", desc: "Quality analytics" },
+  { to: "/settings",  label: "Settings",  icon: Settings,   id: "06", desc: "Config" },
 ]
 
 function NeuralPulse() {

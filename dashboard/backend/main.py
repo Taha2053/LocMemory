@@ -130,6 +130,7 @@ class MemoryPatch(BaseModel):
 class RetrieveRequest(BaseModel):
     query: str
     limit: int = 10
+    include_rejected: bool = False
 
 
 class RateRequest(BaseModel):
@@ -451,10 +452,12 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
     Retrieve memories for a query.
     Fires Hebbian update + procedural detection check in background.
     Logs the retrieval event for quality metrics.
+    Optionally returns rejected candidates when RL agent is enabled.
     """
     import time
     retriever: GraphRetriever = state["retriever"]
     logger: RetrievalLogger = state["logger"]
+    rl_agent = state.get("rl_agent")
 
     t0 = time.monotonic()
     results = retriever.retrieve(req.query)
@@ -462,6 +465,10 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
 
     top = results[: req.limit]
     query_domain = retriever._query_domain
+
+    rejected = []
+    if req.include_rejected and rl_agent and rl_agent.is_available():
+        rejected = results[req.limit: min(len(results), 25)]
 
     entry_id = None
     if logger:
@@ -485,6 +492,7 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
         "query_domain": query_domain,
         "entry_id": entry_id,
         "results": top,
+        "rejected": rejected,
     }
 
 

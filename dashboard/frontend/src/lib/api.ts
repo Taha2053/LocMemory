@@ -74,6 +74,7 @@ export interface RetrieveResponse {
   query_domain: string
   entry_id: string | null
   results: RetrievedResult[]
+  rejected?: RetrievedResult[]
 }
 
 export interface MetricsSummary {
@@ -123,11 +124,11 @@ export const api = {
   deleteMemory: (id: string): Promise<{ deleted: string }> =>
     fetch(`${BASE}/memories/${id}`, { method: "DELETE" }).then((r) => j(r)),
   domains: (): Promise<Domain[]> => fetch(`${BASE}/domains`).then((r) => j(r)),
-  retrieve: (query: string, limit = 10): Promise<RetrieveResponse> =>
+  retrieve: (query: string, limit = 10, includeRejected = false): Promise<RetrieveResponse> =>
     fetch(`${BASE}/retrieve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, limit }),
+      body: JSON.stringify({ query, limit, include_rejected: includeRejected }),
     }).then((r) => j(r)),
   createMemory: (body: {
     text: string
