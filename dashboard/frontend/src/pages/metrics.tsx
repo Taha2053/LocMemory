@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { api, type MetricsSummary } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
+import { useTheme } from "@/lib/theme"
 
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66", "#ff8c26", "#ffd700"] as const
 
@@ -35,6 +36,7 @@ function StarRating({
 }
 
 export function MetricsPage() {
+  const { theme } = useTheme()
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -70,8 +72,8 @@ export function MetricsPage() {
 
   if (loading || !metrics) {
     return (
-      <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
-        <ScanlineOverlay />
+      <div className={`relative h-full min-h-0 font-mono overflow-y-auto ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+        {theme === "dark" && <ScanlineOverlay />}
         <div className="flex items-center justify-center h-full">
           <div className="text-[10px] uppercase tracking-widest text-emerald-500/50 animate-pulse">
             LOADING METRICS...
@@ -85,11 +87,11 @@ export function MetricsPage() {
   const maxDomainCount = Math.max(...domains.map(([, v]) => v), 1)
 
   return (
-    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
-      <ScanlineOverlay />
+    <div className={`relative h-full min-h-0 font-mono overflow-y-auto ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+      {theme === "dark" && <ScanlineOverlay />}
 
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(0, 255, 136,0.08), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 255, 136,0.06), transparent 40%)" }} />
+        style={{ background: theme === "dark" ? "radial-gradient(ellipse at 0% 0%, rgba(0, 255, 136,0.08), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 255, 136,0.06), transparent 40%)" : "radial-gradient(ellipse at 0% 0%, rgba(0, 196, 188,0.04), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 196, 188,0.03), transparent 40%)" }} />
 
       <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/40"
         style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
@@ -104,7 +106,7 @@ export function MetricsPage() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px w-8 bg-emerald-400/40" style={{ boxShadow: "0 0 4px rgba(0, 255, 136,0.4)" }} />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.METRICS</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Quality Metrics</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
             style={{ textShadow: "0 0 20px rgba(0, 255, 136,0.4)" }}>

@@ -79,7 +79,7 @@ export function MemoryCreator({ onCreated }: Props) {
 
   return (
     <div className="pointer-events-auto w-[360px]">
-      <HudPanel id="SYS.INJ.05" className="hud-panel" progressValue={loading ? 45 : successId ? 100 : 0}>
+      <HudPanel id="Add Memory" className="hud-panel" progressValue={loading ? 45 : successId ? 100 : 0}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-[10px] uppercase tracking-widest text-neutral-400">
             Memory Injection

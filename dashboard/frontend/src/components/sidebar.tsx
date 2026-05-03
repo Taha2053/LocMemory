@@ -1,7 +1,8 @@
 ﻿import { NavLink } from "react-router-dom"
-import { Network, FileText, FolderTree, Search, Settings, BarChart2, BookOpen } from "lucide-react"
+import { Network, FileText, FolderTree, Search, Settings, BarChart2, BookOpen, Sun, Moon } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { useTheme } from "@/lib/theme"
 
 const links = [
   { to: "/graph",     label: "Graph",     icon: Network,    id: "01", desc: "Neural map" },
@@ -13,7 +14,32 @@ const links = [
   { to: "/guide",     label: "Guide",     icon: BookOpen,   id: "07", desc: "How it works" },
 ]
 
+function ThemeToggle() {
+  const { theme, toggle } = useTheme()
+  return (
+    <button
+      onClick={toggle}
+      className="mx-3 my-2 flex items-center gap-2 px-3 py-2 rounded-sm border transition-all hover:border-emerald-400/40"
+      style={{
+        borderColor: "rgba(0, 196, 188,0.2)",
+        background: theme === "dark" ? "rgba(0,5,16,0.6)" : "rgba(255,255,255,0.05)",
+      }}
+      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      {theme === "dark" ? (
+        <Moon className="w-3.5 h-3.5 text-emerald-400" style={{ filter: "drop-shadow(0 0 3px rgba(0, 255, 136, 0.5))" }} />
+      ) : (
+        <Sun className="w-3.5 h-3.5 text-amber-400" style={{ filter: "drop-shadow(0 0 3px rgba(251, 191, 36, 0.5))" }} />
+      )}
+      <span className="text-[9px] uppercase tracking-wider" style={{ color: theme === "dark" ? "#525252" : "#737373" }}>
+        {theme === "dark" ? "Dark" : "Light"}
+      </span>
+    </button>
+  )
+}
+
 export function Sidebar() {
+  const { theme } = useTheme()
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -29,24 +55,30 @@ export function Sidebar() {
     <aside
       className="relative flex h-screen w-56 flex-col font-mono overflow-hidden select-none"
       style={{
-        background: "linear-gradient(180deg, #020d0d 0%, #010f0f 50%, #020d0d 100%)",
+        background: theme === "dark" 
+          ? "linear-gradient(180deg, #020d0d 0%, #010f0f 50%, #020d0d 100%)"
+          : "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%)",
         borderRight: "1px solid rgba(0, 196, 188, 0.12)",
       }}
     >
-      {/* Animated right-edge glow */}
-      <div
-        className="pointer-events-none absolute right-0 top-0 h-full w-px"
-        style={{
-          background: "linear-gradient(180deg, transparent 0%, rgba(0, 196, 188,0.45) 25%, rgba(255,140,38,0.45) 55%, rgba(255,77,109,0.3) 82%, transparent 100%)",
-          boxShadow: "0 0 8px rgba(0, 196, 188, 0.3)",
-        }}
-      />
+      {/* Animated right-edge glow - dark only */}
+      {theme === "dark" && (
+        <div
+          className="pointer-events-none absolute right-0 top-0 h-full w-px"
+          style={{
+            background: "linear-gradient(180deg, transparent 0%, rgba(0, 196, 188,0.45) 25%, rgba(255,140,38,0.45) 55%, rgba(255,77,109,0.3) 82%, transparent 100%)",
+            boxShadow: "0 0 8px rgba(0, 196, 188, 0.3)",
+          }}
+        />
+      )}
 
       {/* Top ambient glow */}
       <div
         className="pointer-events-none absolute top-0 left-0 w-full h-32"
         style={{
-          background: "radial-gradient(ellipse at 30% 0%, rgba(0, 196, 188,0.08) 0%, transparent 70%)",
+          background: theme === "dark"
+            ? "radial-gradient(ellipse at 30% 0%, rgba(0, 196, 188,0.08) 0%, transparent 70%)"
+            : "radial-gradient(ellipse at 30% 0%, rgba(0, 196, 188,0.04) 0%, transparent 70%)",
         }}
       />
 
@@ -54,7 +86,9 @@ export function Sidebar() {
       <div
         className="pointer-events-none absolute bottom-0 left-0 w-full h-32"
         style={{
-          background: "radial-gradient(ellipse at 30% 100%, rgba(200,168,255,0.06) 0%, transparent 70%)",
+          background: theme === "dark"
+            ? "radial-gradient(ellipse at 30% 100%, rgba(200,168,255,0.06) 0%, transparent 70%)"
+            : "radial-gradient(ellipse at 30% 100%, rgba(0, 196, 188,0.03) 0%, transparent 70%)",
         }}
       />
 
@@ -193,6 +227,9 @@ export function Sidebar() {
 
       {/* spacer */}
       <div className="flex-1" />
+
+      {/* ── Theme Toggle ── */}
+      <ThemeToggle />
 
       {/* ── Footer ── */}
       <div

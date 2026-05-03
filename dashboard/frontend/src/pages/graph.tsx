@@ -6,7 +6,6 @@ import {
   StatusDot,
   HudBracket,
   ScanlineOverlay,
-  HudPanel,
 } from "@/components/hud"
 import { api, type Stats } from "@/lib/api"
 import { RetrievalConsole } from "@/components/RetrievalConsole"
@@ -14,6 +13,7 @@ import { MemoryInspector } from "@/components/MemoryInspector"
 import { HebbianPanel } from "@/components/HebbianPanel"
 import { PatternsPanel } from "@/components/PatternsPanel"
 import { DomainsPanel } from "@/components/DomainsPanel"
+import { useTheme } from "@/lib/theme"
 
 interface RLStatus {
   enabled: boolean
@@ -29,20 +29,21 @@ const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 const TIER_RGB = ["0,255,136", "0,229,255", "170,255,0", "0,255,102"] as const
 
 const TIER_LABELS = [
-  "Core Context",
-  "Anchor Memories",
-  "Leaf Memories",
-  "Procedural Memories",
+  "Context",
+  "Anchor",
+  "Leaf",
+  "Procedural",
 ]
-const TIER_SUB = ["(Deep)", "(Mid)", "(Facts)", "(Skills)"]
+const TIER_SUB = ["T1", "T2", "T3", "T4"]
 const TIER_DESC = [
-  "High-level semantic hubs",
-  "Stable reference points",
-  "Atomic facts & observations",
-  "Skills, processes & workflows",
+  "Recent session facts — high recency, fast decay",
+  "Consolidated summaries via Louvain clustering",
+  "Stable long-term facts from conversations",
+  "Cross-domain behavioural patterns",
 ]
 
 export function GraphPage() {
+  const { theme } = useTheme()
   const [selected, setSelected] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
@@ -78,10 +79,10 @@ export function GraphPage() {
 
   const tierCounts = stats?.tier_counts
     ? [
-        stats.tier_counts["context"] || 0,
-        stats.tier_counts["anchor"] || 0,
-        stats.tier_counts["leaf"] || 0,
-        stats.tier_counts["procedural"] || 0,
+        Number(stats.tier_counts["1"] ?? stats.tier_counts["context"] ?? 0),
+        Number(stats.tier_counts["2"] ?? stats.tier_counts["anchor"] ?? 0),
+        Number(stats.tier_counts["3"] ?? stats.tier_counts["leaf"] ?? 0),
+        Number(stats.tier_counts["4"] ?? stats.tier_counts["procedural"] ?? 0),
       ]
     : [0, 0, 0, 0]
 
@@ -89,20 +90,22 @@ export function GraphPage() {
   const totalEdges = stats?.edges ?? 0
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#020d0d] font-mono">
-      {/* Layer 0: Matrix rain background */}
-      <div className="absolute inset-0 z-0">
-        <MatrixRain
-          fontSize={14}
-          speed={60}
-          foreground="#00ff88"
-          background="#020d0d"
-          opacity={0.07}
-        />
-      </div>
+    <div className={`relative h-full w-full overflow-hidden font-mono ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+      {/* Layer 0: Matrix rain background - dark only */}
+      {theme === "dark" && (
+        <div className="absolute inset-0 z-0">
+          <MatrixRain
+            fontSize={14}
+            speed={60}
+            foreground="#00ff88"
+            background="#020d0d"
+            opacity={0.07}
+          />
+        </div>
+      )}
 
       {/* Layer 1: Dark base */}
-      <div className="absolute inset-0 z-[1] bg-[#020d0d]/95" />
+      <div className={`absolute inset-0 z-[1] ${theme === "dark" ? "bg-[#020d0d]/95" : "bg-slate-100/95"}`} />
 
       {/* Layer 2: Radial glow */}
       <div
@@ -170,47 +173,14 @@ export function GraphPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "240px 1fr",
+              gridTemplateColumns: "270px 1fr",
               gap: "8px",
             }}
           >
-            {/* Left: Edge Dynamics + Cognitive Ops (50/50) */}
-            <div
-              className="flex flex-col gap-2"
-              style={{
-                background: "rgba(0,20,15,0.85)",
-                border: "1px solid rgba(0,255,180,0.15)",
-                borderRadius: "8px",
-                padding: "16px",
-              }}
-            >
-              {/* SYS.HBB.06 Header */}
-              <div
-                className="flex items-center justify-between pb-2 mb-2"
-                style={{ borderBottom: "2px solid #009b94" }}
-              >
-                <span className="text-[10px] uppercase tracking-widest text-neutral-400">
-                  // SYS.HBB.06
-                </span>
-                <StatusDot label="LIVE" color="#009b94" />
-              </div>
-              <div className="flex-1" style={{ minHeight: "0" }}>
-                <HebbianPanel />
-              </div>
-
-              {/* SYS.PCT.07 Header */}
-              <div
-                className="flex items-center justify-between pb-2 mt-4 mb-2"
-                style={{ borderBottom: "2px solid #a855f7" }}
-              >
-                <span className="text-[10px] uppercase tracking-widest text-neutral-400">
-                  // SYS.PCT.07
-                </span>
-                <StatusDot label="IDLE" color="#a855f7" />
-              </div>
-              <div className="flex-1" style={{ minHeight: "0" }}>
-                <PatternsPanel />
-              </div>
+            {/* Left: Edge Dynamics + Cognitive Ops */}
+            <div className="flex flex-col gap-2 overflow-hidden">
+              <HebbianPanel />
+              <PatternsPanel />
             </div>
 
             {/* Right: 3D Graph Canvas */}
@@ -254,58 +224,46 @@ export function GraphPage() {
               style={{ borderBottom: "2px solid #00ff88" }}
             >
               <span className="text-[10px] uppercase tracking-widest text-neutral-400">
-                // SYS.MEM.01
+                Memory Tiers
               </span>
               <StatusDot label="ACTIVE" color="#00ff88" />
             </div>
-            <div className="flex-1 space-y-1.5 overflow-y-auto">
-              {TIER_LABELS.map((label, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2.5 px-2 py-1.5"
-                >
-                  <span
-                    className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: TIER_COLORS[i],
-                      boxShadow: `0 0 8px ${TIER_COLORS[i]}`,
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-500 text-neutral-100">
-                      {label}{" "}
-                      <span className="font-400 text-neutral-500">{TIER_SUB[i]}</span>
+            <div className="flex-1 space-y-2 overflow-y-auto">
+              {TIER_LABELS.map((label, i) => {
+                const count = tierCounts[i]
+                const pct = totalNodes > 0 ? Math.round((count / totalNodes) * 100) : 0
+                return (
+                  <div key={i} className="px-2 py-1.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: TIER_COLORS[i], boxShadow: `0 0 6px ${TIER_COLORS[i]}` }}
+                      />
+                      <span className="text-[9px] text-neutral-500 font-mono">{TIER_SUB[i]}</span>
+                      <span className="text-[11px] text-neutral-100 flex-1">{label}</span>
+                      <span className="text-[11px] font-mono tabular-nums" style={{ color: TIER_COLORS[i] }}>
+                        {loading ? "…" : <AnimatedNumber value={count} duration={1200} className="tabular-nums" />}
+                      </span>
+                      {!loading && totalNodes > 0 && (
+                        <span className="text-[9px] text-neutral-600 w-8 text-right">{pct}%</span>
+                      )}
                     </div>
-                    <div className="text-[10px] text-neutral-500 leading-snug">
-                      {TIER_DESC[i]}
+                    <div className="h-0.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: loading ? "0%" : `${pct}%`, background: TIER_COLORS[i], boxShadow: `0 0 4px ${TIER_COLORS[i]}80` }}
+                      />
                     </div>
+                    <div className="text-[9px] text-neutral-600 mt-0.5 leading-snug">{TIER_DESC[i]}</div>
                   </div>
-                  <div className="text-[11px] font-500 tabular-nums text-neutral-100">
-                    {loading ? (
-                      <span className="text-neutral-600">…</span>
-                    ) : (
-                      <AnimatedNumber value={tierCounts[i]} duration={1200} className="tabular-nums" />
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
           {/* SYS.DOM.04 - Knowledge Domains (bottom) */}
-          <div className="flex-1 flex flex-col min-h-0 mt-4">
-            <div
-              className="flex items-center justify-between pb-2 mb-2"
-              style={{ borderBottom: "2px solid #00e5ff" }}
-            >
-              <span className="text-[10px] uppercase tracking-widest text-neutral-400">
-                // SYS.DOM.04
-              </span>
-              <StatusDot label="ACTIVE" color="#00e5ff" />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <DomainsPanel />
-            </div>
+          <div className="flex-1 min-h-0 mt-4 overflow-y-auto">
+            <DomainsPanel />
           </div>
         </div>
       </div>

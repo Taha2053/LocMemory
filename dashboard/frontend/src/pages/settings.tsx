@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { Save, RotateCcw, CheckCircle, AlertCircle } from "lucide-react"
+import { useTheme } from "@/lib/theme"
 
 // ── helpers ──────────────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ function SelectField({ label, desc, value, options, onChange }: {
 // ── main page ─────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const { theme } = useTheme()
   const [draft, setDraft] = useState<Record<string, any> | null>(null)
   const [original, setOriginal] = useState<Record<string, any> | null>(null)
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
@@ -169,12 +171,12 @@ export function SettingsPage() {
     draft?.[section]?.[key] ?? fallback
 
   return (
-    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
-      <ScanlineOverlay />
+    <div className={`relative h-full min-h-0 font-mono overflow-y-auto ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+      {theme === "dark" && <ScanlineOverlay />}
 
       {/* Ambient */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(0, 196, 188,0.06), transparent 40%)" }} />
+        style={{ background: theme === "dark" ? "radial-gradient(ellipse at 0% 0%, rgba(0, 196, 188,0.06), transparent 40%)" : "radial-gradient(ellipse at 0% 0%, rgba(0, 196, 188,0.03), transparent 40%)" }} />
 
       {/* Corner brackets */}
       <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/30" />
@@ -188,7 +190,7 @@ export function SettingsPage() {
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.CONFIG</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Settings</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
             style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.4)" }}>

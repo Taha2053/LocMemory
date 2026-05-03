@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ScanlineOverlay } from "@/components/hud"
-import { ChevronRight, ChevronDown } from "lucide-react"
+import { useTheme } from "@/lib/theme"
 
 interface Section {
   id: string
@@ -9,33 +9,13 @@ interface Section {
   content: React.ReactNode
 }
 
-function Badge({ label, color = "#00c4bc" }: { label: string; color?: string }) {
-  return (
-    <span
-      className="inline-block px-1.5 py-0.5 text-[8px] uppercase tracking-widest rounded-sm font-mono mr-1"
-      style={{ background: `${color}18`, border: `1px solid ${color}40`, color }}
-    >
-      {label}
-    </span>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-3 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-      <span className="text-[9px] uppercase tracking-wider text-neutral-600 w-24 shrink-0 mt-0.5">{label}</span>
-      <span className="text-[11px] text-neutral-300 font-mono">{value}</span>
-    </div>
-  )
-}
-
 function TierCard({ tier, name, color, desc, example }: {
   tier: number; name: string; color: string; desc: string; example: string
 }) {
   return (
     <div
       className="rounded-sm px-4 py-3"
-      style={{ background: "rgba(0,5,16,0.7)", borderLeft: `3px solid ${color}`, border: `1px solid ${color}20`, borderLeftWidth: 3 }}
+      style={{ background: "rgba(0,5,16,0.7)", border: `1px solid ${color}20`, borderLeftWidth: 3, borderLeftColor: color, borderLeftStyle: "solid" }}
     >
       <div className="flex items-center gap-2 mb-1">
         <span className="text-[9px] font-mono text-neutral-600">T{tier}</span>
@@ -288,28 +268,19 @@ const SECTIONS: Section[] = [
 ]
 
 export function GuidePage() {
+  const { theme } = useTheme()
   const [activeSection, setActiveSection] = useState<string>("what")
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-
-  const toggle = (id: string) => {
-    setCollapsed(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
 
   const active = SECTIONS.find(s => s.id === activeSection)
 
   return (
-    <div className="relative flex h-full min-h-0 bg-[#020d0d] font-mono">
-      <ScanlineOverlay />
+    <div className={`relative flex h-full min-h-0 font-mono ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+      {theme === "dark" && <ScanlineOverlay />}
 
-      {/* Ambient */}
       <div className="pointer-events-none absolute inset-0"
         style={{ background: "radial-gradient(ellipse at 10% 30%, rgba(0, 196, 188,0.05), transparent 50%)" }} />
 
-      {/* ── Left nav ── */}
+      {/* Left nav */}
       <div
         className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto"
         style={{ borderRight: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
@@ -354,11 +325,10 @@ export function GuidePage() {
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="relative z-10 flex-1 overflow-y-auto px-8 py-8">
         {active && (
           <div className="max-w-3xl">
-            {/* Section header */}
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-1">
                 <div className="h-px w-6" style={{ background: "rgba(0, 196, 188,0.4)" }} />
@@ -372,14 +342,11 @@ export function GuidePage() {
               </h2>
             </div>
 
-            {/* Divider */}
             <div className="mb-6 h-px w-full"
               style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.2), transparent)" }} />
 
-            {/* Content */}
             <div>{active.content}</div>
 
-            {/* Navigation arrows */}
             <div className="flex items-center justify-between mt-10 pt-6"
               style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}>
               {(() => {
@@ -391,14 +358,14 @@ export function GuidePage() {
                     <button
                       onClick={() => prev && setActiveSection(prev.id)}
                       disabled={!prev}
-                      className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors disabled:opacity-20 disabled:cursor-default"
+                      className="text-[10px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors disabled:opacity-20 disabled:cursor-default"
                     >
                       ← {prev?.title || ""}
                     </button>
                     <button
                       onClick={() => next && setActiveSection(next.id)}
                       disabled={!next}
-                      className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors disabled:opacity-20 disabled:cursor-default"
+                      className="text-[10px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors disabled:opacity-20 disabled:cursor-default"
                     >
                       {next?.title || ""} →
                     </button>

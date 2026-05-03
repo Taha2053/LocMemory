@@ -2,6 +2,7 @@
 import { api, type RetrieveResponse } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { MatrixRain } from "@/components/MatrixRain"
+import { useTheme } from "@/lib/theme"
 
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 
@@ -198,6 +199,7 @@ function CompareView({ result, loading: compareLoading }: { result: CompareResul
 }
 
 export function RetrievalPage() {
+  const { theme } = useTheme()
   const [query, setQuery] = useState("")
   const [result, setResult] = useState<RetrieveResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -237,8 +239,8 @@ export function RetrievalPage() {
   }
 
   return (
-    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
-      <ScanlineOverlay />
+    <div className={`relative h-full min-h-0 font-mono overflow-y-auto ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
+      {theme === "dark" && <ScanlineOverlay />}
 
       {(loading || compareLoading) && (
         <MatrixRain
@@ -265,7 +267,7 @@ export function RetrievalPage() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.RETRIEVAL</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Memory Retrieval</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
             style={{ textShadow: "0 0 20px rgba(0, 255, 136,0.4)" }}>

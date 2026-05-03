@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { api } from "@/lib/api"
 import { HudPanel, StatusDot } from "@/components/hud"
 
@@ -7,103 +7,135 @@ interface HebbianStats {
   min_weight: number
   max_weight: number
   avg_weight: number
+  active_edges?: number
+  strong_edges?: number
   histogram: { range: string; count: number }[]
-  active_edges?: number   // neurons that fire together (weight >= 0.8)
-  strong_edges?: number   // strong connections (weight >= 1.0)
 }
 
+const REFRESH_INTERVAL = 12_000
+
 export function HebbianPanel() {
-  const [data, setData] = useState<HebbianStats | null>(null)
+  const [data, setData]       = useState<HebbianStats | null>(null)
+  const [error, setError]     = useState(false)
   const [decaying, setDecaying] = useState(false)
-  const [flash, setFlash] = useState<string | null>(null)
+  const [flash, setFlash]     = useState<string | null>(null)
 
-  const load = () => api.hebbianStats().then(setData).catch(() => {})
+  const load = useCallback(() => {
+    api.hebbianStats()
+      .then((d) => { setData(d); setError(false) })
+      .catch(() => setError(true))
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const id = setInterval(load, REFRESH_INTERVAL)
+    return () => clearInterval(id)
+  }, [load])
 
   const decay = async () => {
     setDecaying(true)
     setFlash(null)
     try {
       const res = await api.hebbianDecay()
-      setFlash(`${res.edges_decayed} edges decayed`)
-      await load()
+      setFlash(res.edges_decayed > 0
+        ? `${res.edges_decayed} edges decayed`
+        : "no edges to decay"
+      )
+      load()
     } catch {
-      setFlash("decay failed")
+      setFlash("decay failed — is backend running?")
     } finally {
       setDecaying(false)
-      setTimeout(() => setFlash(null), 3000)
+      setTimeout(() => setFlash(null), 4000)
     }
   }
 
-  const maxCount = data
-    ? Math.max(1, ...data.histogram.map((b) => b.count))
-    : 1
+  const maxCount = data ? Math.max(1, ...data.histogram.map((b) => b.count)) : 1
+
+  const dotColor  = error ? "#ef4444" : "#009b94"
+  const dotLabel  = error ? "ERROR"   : data ? "LIVE" : "LOADING"
 
   return (
-    <HudPanel id="SYS.HBB.06" className="hud-panel" progressValue={data ? 65 : 20}>
-      <div className="flex items-center justify-between mb-2">
+    <HudPanel id="Hebbian Learning" className="hud-panel p-4" progressValue={data ? 65 : 20}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] uppercase tracking-widest text-neutral-400">
           Edge Dynamics
         </div>
-        <StatusDot label="LIVE" color="#009b94" />
+        <StatusDot label={dotLabel} color={dotColor} />
       </div>
 
-      {!data ? (
+      {error ? (
+        <div className="text-[10px] text-red-400/70 italic py-2">
+          backend unreachable — start the server
+        </div>
+      ) : !data ? (
         <div className="text-[10px] text-neutral-600 italic">loading...</div>
       ) : (
         <>
           {/* Weight histogram */}
-          <div className="mb-2">
-            <div className="text-[8px] uppercase tracking-wider text-neutral-600 mb-1">
+          <div className="mb-3">
+            <div className="text-[8px] uppercase tracking-wider text-neutral-600 mb-1.5">
               weight distribution
             </div>
-            <div className="flex items-end gap-px h-8">
+            <div className="flex items-end gap-px h-10">
               {data.histogram.map((b, i) => {
                 const pct = (b.count / maxCount) * 100
+                const active = b.count > 0
                 return (
                   <div
                     key={i}
-                    className="flex-1 transition-all duration-500"
+                    className="flex-1 transition-all duration-700"
                     style={{
-                      height: `${Math.max(pct, 2)}%`,
-                      background: `rgba(0, 255, 136,${0.3 + (pct / 100) * 0.6})`,
+                      height: `${Math.max(active ? pct : 0, active ? 4 : 1)}%`,
+                      background: active
+                        ? `rgba(0,255,136,${0.25 + (pct / 100) * 0.65})`
+                        : "rgba(255,255,255,0.04)",
                     }}
-                    title={`${b.range}: ${b.count}`}
+                    title={`${b.range}: ${b.count} edges`}
                   />
                 )
               })}
             </div>
-            <div className="flex justify-between text-[8px] text-neutral-600 mt-0.5">
+            <div className="flex justify-between text-[8px] text-neutral-600 mt-1">
               <span>0.0</span>
-              <span>weight →</span>
+              <span className="text-neutral-700">weight →</span>
               <span>5.0</span>
             </div>
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-4 gap-1 mb-2">
+          <div className="grid grid-cols-4 gap-1 mb-3">
             {[
-              { label: "edges", value: data.count },
-              { label: "avg w", value: (data.avg_weight ?? 0).toFixed(2) },
-              { label: "max w", value: (data.max_weight ?? 0).toFixed(2) },
-              { label: "active", value: data.active_edges ?? 0 },  // "neurons that fire together"
+              { label: "edges",  value: data.count },
+              { label: "avg w",  value: (data.avg_weight ?? 0).toFixed(2) },
+              { label: "max w",  value: (data.max_weight ?? 0).toFixed(2) },
+              { label: "active", value: data.active_edges ?? 0 },
             ].map(({ label, value }) => (
-              <div key={label} className="border border-emerald-400/10 bg-black/30 px-1.5 py-1 text-center">
-                <div className="text-[8px] uppercase tracking-wider text-neutral-500">{label}</div>
-                <div className="text-[11px] font-mono text-neutral-100 tabular-nums">{value}</div>
+              <div
+                key={label}
+                className="border border-emerald-400/10 bg-black/30 px-1 py-1.5 text-center"
+              >
+                <div className="text-[8px] uppercase tracking-wider text-neutral-500 mb-0.5">
+                  {label}
+                </div>
+                <div className="text-[11px] font-mono text-neutral-100 tabular-nums">
+                  {value}
+                </div>
               </div>
             ))}
           </div>
 
           {flash && (
-            <div className="text-[10px] text-emerald-400/80 mb-1.5">{flash}</div>
+            <div className={`text-[10px] mb-2 ${flash.includes("fail") || flash.includes("error") || flash.includes("backend") ? "text-red-400/80" : "text-emerald-400/80"}`}>
+              {flash}
+            </div>
           )}
 
           <button
             onClick={decay}
             disabled={decaying}
-            className="scan-button border border-emerald-400/30 px-3 py-1 text-[10px] text-emerald-400/70 uppercase tracking-wider transition-all disabled:opacity-40 w-full"
+            className="scan-button w-full border border-emerald-400/30 px-3 py-1.5 text-[10px] text-emerald-400/70 uppercase tracking-wider transition-all disabled:opacity-40 hover:border-emerald-400/60 hover:text-emerald-400"
           >
             {decaying ? "decaying..." : "[ apply decay ]"}
           </button>

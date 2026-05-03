@@ -13,11 +13,18 @@ import { GuidePage } from "@/pages/guide"
 import { MatrixIntro } from "@/components/MatrixIntro"
 
 export default function App() {
-  const [introComplete, setIntroComplete] = useState(false)
+  const [introComplete, setIntroComplete] = useState(
+    () => localStorage.getItem("locmemory_intro_seen") === "1"
+  )
+
+  const handleIntroComplete = () => {
+    localStorage.setItem("locmemory_intro_seen", "1")
+    setIntroComplete(true)
+  }
 
   return (
     <>
-      {!introComplete && <MatrixIntro onComplete={() => setIntroComplete(true)} />}
+      {!introComplete && <MatrixIntro onComplete={handleIntroComplete} />}
       {introComplete && (
         <BrowserRouter>
           <Routes>

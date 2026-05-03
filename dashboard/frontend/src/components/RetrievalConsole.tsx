@@ -36,7 +36,7 @@ export function RetrievalConsole({ onSelect }: Props) {
 
   return (
     <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-[640px] max-w-[90vw] pointer-events-auto">
-      <HudPanel id="SYS.RTR.04" className="hud-panel" progressValue={loading ? 60 : 100}>
+      <HudPanel id="Retrieval Console" className="hud-panel p-4" progressValue={loading ? 60 : 100}>
         <div className="flex items-center justify-between mb-2">
           <div className="text-[10px] uppercase tracking-widest text-neutral-400">
             Retrieval Console
