@@ -189,7 +189,7 @@ export function MetricsPage() {
 
   if (loading || !metrics) {
     return (
-      <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d]">
+      <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
         <ScanlineOverlay />
         <div className="flex items-center justify-center h-full">
           <div className="text-[10px] uppercase tracking-widest text-emerald-500/50 animate-pulse flex items-center gap-2">
@@ -216,7 +216,7 @@ export function MetricsPage() {
   ]
 
   return (
-    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d]">
+    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
       <ScanlineOverlay />
 
       <div className="pointer-events-none absolute inset-0"

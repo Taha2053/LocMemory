@@ -169,7 +169,7 @@ export function SettingsPage() {
     draft?.[section]?.[key] ?? fallback
 
   return (
-    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d]">
+    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
       <ScanlineOverlay />
 
       {/* Ambient */}

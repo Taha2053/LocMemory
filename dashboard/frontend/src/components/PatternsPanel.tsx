@@ -107,7 +107,7 @@ export function PatternsPanel() {
           </div>
 
           {/* Pattern list */}
-          <div className="space-y-1 mb-3 max-h-[90px] overflow-y-auto pr-0.5">
+          <div className="space-y-1 mb-3 max-h-[90px] overflow-y-auto pr-0.5 custom-scrollbar">
             {patterns.length === 0 ? (
               <div className="text-[10px] text-neutral-600 italic">
                 none detected yet — click detect

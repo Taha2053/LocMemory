@@ -154,7 +154,7 @@ function DomainDetail({ domain, idx, total, onBrowse }: {
       </div>
 
       {/* Subdomains */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
         {activeSubs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-center">
             <div className="text-[10px] text-neutral-700 uppercase tracking-widest">No subdomains classified yet</div>
@@ -230,23 +230,26 @@ function DomainBubbles({ domains, total, selected, onSelect }: {
         const color   = domainColor(d.name, idx)
         const pct     = total > 0 ? (d.total / total) * 100 : 0
         const isActive = selected === d.name
-        // Scale size: min 60px, max 130px
-        const size    = Math.max(60, Math.min(130, 60 + (pct / 100) * 500))
+        const CARD_WIDTH = 120
+        const CARD_HEIGHT = 72
 
         return (
           <button
             key={d.name}
             onClick={() => onSelect(d.name)}
-            className="flex flex-col items-center justify-center rounded-sm transition-all duration-200 shrink-0"
+            className="flex flex-col items-center justify-center rounded-sm transition-all duration-200"
             style={{
-              width: size,
-              height: size * 0.75,
+              width: CARD_WIDTH,
+              height: CARD_HEIGHT,
+              minWidth: CARD_WIDTH,
+              maxWidth: CARD_WIDTH,
+              minHeight: CARD_HEIGHT,
               background: isActive ? `${color}15` : "rgba(0,5,16,0.7)",
               border: `1px solid ${isActive ? color : `${color}25`}`,
               boxShadow: isActive ? `0 0 20px ${color}25` : "none",
             }}
           >
-            <span className="text-[10px] uppercase tracking-wider capitalize font-medium mb-1"
+            <span className="text-[9px] uppercase tracking-wider capitalize font-medium mb-0.5 max-w-full truncate"
               style={{ color: isActive ? color : `${color}90` }}>
               {d.name}
             </span>
@@ -254,7 +257,7 @@ function DomainBubbles({ domains, total, selected, onSelect }: {
               style={{ color: isActive ? color : "#525252" }}>
               {d.total}
             </span>
-            <span className="text-[8px] text-neutral-700 tabular-nums">{pct.toFixed(0)}%</span>
+            <span className="text-[7px] text-neutral-700 tabular-nums">{pct.toFixed(0)}%</span>
           </button>
         )
       })}
@@ -358,7 +361,7 @@ export function DomainsPage() {
 
           {/* Left: domain list */}
           <div
-            className="w-64 shrink-0 flex flex-col overflow-hidden"
+            className="w-64 shrink-0 flex flex-col overflow-hidden custom-scrollbar"
             style={{ borderRight: "1px solid rgba(0,255,136,0.1)" }}
           >
             {/* Search */}
@@ -373,7 +376,7 @@ export function DomainsPage() {
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
               {loading ? (
                 <div className="text-[10px] text-emerald-500/40 animate-pulse uppercase tracking-widest py-6 text-center">
                   loading...

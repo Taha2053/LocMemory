@@ -255,7 +255,7 @@ function DetailPanel({
 
   return (
     <div
-      className="relative z-10 w-72 shrink-0 flex flex-col overflow-y-auto"
+      className="relative z-10 w-72 shrink-0 flex flex-col overflow-y-auto custom-scrollbar"
       style={{ borderLeft: "1px solid rgba(0,255,136,0.12)", background: "rgba(0,5,16,0.9)" }}
     >
       {/* Header */}
@@ -298,7 +298,7 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
+      <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto custom-scrollbar">
 
         {/* Delete confirmation */}
         {confirmDelete && (
@@ -546,7 +546,7 @@ export function MemoriesPage() {
 
       {/* ── Domain sidebar ── */}
       <div
-        className="relative z-10 w-48 shrink-0 flex flex-col overflow-y-auto"
+        className="relative z-10 w-48 shrink-0 flex flex-col overflow-y-auto custom-scrollbar"
         style={{ borderRight: "1px solid rgba(0,255,136,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
         <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(0,255,136,0.1)" }}>
@@ -737,7 +737,7 @@ export function MemoriesPage() {
         )}
 
         {/* Memory grid */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           {loading ? (
             <div className="text-[10px] uppercase tracking-widest text-emerald-500/50 animate-pulse py-12 text-center">
               syncing memory graph...

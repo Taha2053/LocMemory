@@ -79,7 +79,7 @@ export function RetrievalConsole({ onSelect }: Props) {
         )}
 
         {expanded && results.length > 0 && (
-          <div className="mt-3 max-h-[280px] overflow-y-auto space-y-1.5 pr-1">
+          <div className="mt-3 max-h-[280px] overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
             {results.map((r, i) => (
               <button
                 key={r.node_id}

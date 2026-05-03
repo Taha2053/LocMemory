@@ -75,9 +75,21 @@ function hashId(str: string): number {
 const MARKER_BASE_SCALE = 0.05
 const ZOOM_DISTANCE = 0.35
 // Scale nodes inward so they sit inside the brain boundary
-const INWARD_SCALE = 0.88
+const INWARD_SCALE = 0.78
 const DEFAULT_CAM_Z = 1.9
 const DEFAULT_CAM_Z_MOBILE = 2.9
+
+// Clamp position to stay within brain bounding sphere
+function clampToBrainSphere(pos: Vector3, center: Vector3, radius: number): Vector3 {
+  const scaledRadius = radius * INWARD_SCALE
+  const toPos = pos.clone().sub(center)
+  const dist = toPos.length()
+  if (dist > scaledRadius) {
+    toPos.normalize().multiplyScalar(scaledRadius)
+    return center.clone().add(toPos)
+  }
+  return pos.clone()
+}
 
 interface BrainSceneProps extends React.HTMLAttributes<HTMLDivElement> {
   modelUrl?: string
@@ -154,8 +166,9 @@ export function BrainScene({
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.enablePan = false
-    controls.minDistance = 0.6
-    controls.maxDistance = 5
+    // Zoom constraints: keep brain reasonably sized in viewport
+    controls.minDistance = 1.2
+    controls.maxDistance = 2.5
     controls.rotateSpeed = 0.6
     controls.zoomSpeed = 0.7
     controls.target.set(0, 0, 0)
@@ -450,19 +463,34 @@ export function BrainScene({
           const positionsArr = brainMesh.geometry.attributes.position.array
           const positionCount = positionsArr.length / 3
 
+          // Compute bounding sphere from brain mesh for containment
+          const posArray = positionsArr as unknown as { length: number; [i: number]: number }
+          let minX = Infinity, maxX = -Infinity
+          let minY = Infinity, maxY = -Infinity
+          let minZ = Infinity, maxZ = -Infinity
+          for (let i = 0; i < positionCount; i++) {
+            const x = posArray[i * 3], y = posArray[i * 3 + 1], z = posArray[i * 3 + 2]
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x)
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y)
+            minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z)
+          }
+          const brainCenter = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
+          const brainRadius = Math.max(maxX - minX, maxY - minY, maxZ - minZ) / 2
+
           nodeIds = nodes.map((n) => n.id)
           nodes.forEach((n, i) => {
             nodeIndexById.set(n.id, i)
             nodeTiers.push(n.tier)
             baseScales.push(MARKER_BASE_SCALE)
             const vIdx = hashId(n.id) % positionCount
-            const x = positionsArr[vIdx * 3]
-            const y = positionsArr[vIdx * 3 + 1]
-            const z = positionsArr[vIdx * 3 + 2]
-            // Scale inward to keep nodes inside brain boundary
-            nodePositions.push(
-              new Vector3(x * INWARD_SCALE, y * INWARD_SCALE, z * INWARD_SCALE),
+            const rawPos = new Vector3(
+              positionsArr[vIdx * 3],
+              positionsArr[vIdx * 3 + 1],
+              positionsArr[vIdx * 3 + 2],
             )
+            // Clamp to brain sphere to ensure nodes stay inside boundary
+            const clampedPos = clampToBrainSphere(rawPos, brainCenter, brainRadius)
+            nodePositions.push(clampedPos)
           })
 
           // Shared unit plane — actual world size set via scale in animate loop

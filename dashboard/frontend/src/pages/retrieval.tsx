@@ -322,7 +322,7 @@ function RLPanel({
               {showLog && (
                 <div
                   ref={logRef}
-                  className="mt-1.5 max-h-28 overflow-y-auto space-y-0.5 pr-1"
+                  className="mt-1.5 max-h-28 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar"
                   style={{ scrollbarWidth: "none" }}
                 >
                   {training.log.map((line, i) => (
@@ -840,7 +840,7 @@ export function RetrievalPage() {
   const submit = () => (mode === "compare" ? runCompare() : run())
 
   return (
-    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d]">
+    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
       <ScanlineOverlay />
 
       {/* ambient glow */}

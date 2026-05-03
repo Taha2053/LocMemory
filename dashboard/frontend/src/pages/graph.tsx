@@ -221,7 +221,7 @@ export function GraphPage() {
               </span>
               <StatusDot label="ACTIVE" color="#00ff88" />
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto">
+            <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
               {TIER_LABELS.map((label, i) => {
                 const count = tierCounts[i]
                 const pct = totalNodes > 0 ? Math.round((count / totalNodes) * 100) : 0
@@ -255,7 +255,7 @@ export function GraphPage() {
           </div>
 
           {/* SYS.DOM.04 - Knowledge Domains (bottom) */}
-          <div className="flex-1 min-h-0 mt-4 overflow-y-auto">
+          <div className="flex-1 min-h-0 mt-4 overflow-y-auto custom-scrollbar">
             <DomainsPanel />
           </div>
         </div>

@@ -280,7 +280,7 @@ export function GuidePage() {
 
       {/* Left nav */}
       <div
-        className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto"
+        className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto custom-scrollbar"
         style={{ borderRight: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
       >
         <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
@@ -324,7 +324,7 @@ export function GuidePage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-8 py-8">
+      <div className="relative z-10 flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
         {active && (
           <div className="max-w-3xl">
             <div className="mb-6">
