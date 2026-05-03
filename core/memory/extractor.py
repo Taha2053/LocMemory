@@ -50,7 +50,9 @@ class MemoryExtractor:
         ollama_model: str = DEFAULT_MODEL,
     ):
         self.graph_manager = graph_manager
-        self.classifier = classifier or MemoryClassifier()
+        _config = get_config()
+        threshold = _config.get("classification", "similarity_threshold", 0.45)
+        self.classifier = classifier or MemoryClassifier(confidence_threshold=threshold)
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
 

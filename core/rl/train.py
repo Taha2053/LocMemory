@@ -199,7 +199,8 @@ class RetrievalTrainer:
         print("Setting up embedding model...")
 
         # Initialize classifier (provides embeddings)
-        self._classifier = MemoryClassifier()
+        threshold = self._config.get("classification", "similarity_threshold", 0.45)
+        self._classifier = MemoryClassifier(confidence_threshold=threshold)
         self._embedding_model = self._classifier._model
 
         # Optionally populate graph for richer episodes

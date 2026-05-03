@@ -93,7 +93,7 @@ class MemoryClassifier:
         ollama_url: str = OLLAMA_URL,
         ollama_model: str = DEFAULT_MODEL,
         use_fallback: bool = True,
-        confidence_threshold: float = 0.3,
+        confidence_threshold: float = 0.45,
         domains_file: str = "data/domains.json",
     ):
         self.model_name = model_name
