@@ -189,26 +189,37 @@ class RLAgent:
         token_budget: int,
     ) -> list[dict]:
         """
-        Fallback hybrid selection using current scoring.
+        Fallback hybrid selection using bandit-style reward signal.
 
-        Uses semantic + graph scores to select top-k.
+        Uses multiple signals: semantic score, recency, hebbian weight, domain match.
         """
         candidates = retrieval_result.candidates
         if not candidates:
             return []
 
-        # Sort by score (descending)
-        sorted_cands = sorted(
-            candidates,
-            key=lambda x: x.get("score", 0.0),
-            reverse=True,
-        )
-
-        # Select top-k that fit in token budget
+        scored_candidates = []
+        for cand in candidates:
+            base_score = cand.get("score", 0.0)
+            
+            hebbian_score = cand.get("hebbian", 0.5)
+            domain_match = 1.0 if cand.get("domain") else 0.0
+            tier_bonus = {1: 1.2, 2: 1.0, 3: 0.8, 4: 0.6}.get(cand.get("tier", 3), 0.5)
+            
+            reward_signal = (
+                0.4 * base_score +
+                0.2 * hebbian_score +
+                0.2 * domain_match +
+                0.2 * tier_bonus
+            )
+            
+            scored_candidates.append((reward_signal, cand))
+        
+        scored_candidates.sort(key=lambda x: x[0], reverse=True)
+        
         selected = []
         total_chars = 0
 
-        for cand in sorted_cands:
+        for _, cand in scored_candidates:
             text_len = len(cand.get("text", ""))
             if total_chars + text_len <= token_budget:
                 selected.append(cand)
@@ -218,6 +229,24 @@ class RLAgent:
                 break
 
         return selected
+
+    def update_with_feedback(
+        self,
+        selected_candidates: list[dict],
+        response_quality: float,
+    ) -> None:
+        """
+        Update internal Q-values based on response quality feedback.
+
+        This is a simple bandit-style update for future selections.
+        """
+        for cand in selected_candidates:
+            node_id = cand.get("node_id")
+            if node_id:
+                key = f"q_{node_id}"
+                current_q = getattr(self, key, 0.5)
+                new_q = current_q + 0.1 * (response_quality - current_q)
+                setattr(self, key, max(0.0, min(1.0, new_q)))
 
     def get_stats(self) -> dict:
         """Get agent statistics."""

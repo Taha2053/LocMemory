@@ -17,7 +17,9 @@ import sys
 from rich.console import Console
 
 from core.memory import GraphManager, GraphRetriever, MemoryExtractor, MemoryClassifier
+from core.memory import HebbianUpdater, MemoryConsolidator
 from core.memory.necessity import RetrievalNecessityHeuristic
+from core.rl.agent import RLAgent
 from core.context import pack_context, build_prompt
 from core.llm import load_config, call_llm, is_model_available, resolve_model
 from core.settings.config import get_config
@@ -127,6 +129,10 @@ def run_pipeline(
     user_input: str,
     retriever: GraphRetriever,
     extractor: MemoryExtractor,
+    hebbian: HebbianUpdater,
+    consolidator: MemoryConsolidator,
+    rl_agent: RLAgent,
+    state: dict,
     model: str,
     extraction_enabled: bool = True,
     use_necessity_heuristic: bool = True,
@@ -135,13 +141,15 @@ def run_pipeline(
     Execute one chat turn:
       0. Check retrieval necessity heuristic (optional)
       1. Retrieve relevant memory nodes from the cognitive graph
+      1.5. RL agent selection (if available)
       2. Pack them within the token budget
       3. Build the final prompt
       4. Call the LLM
-      5. Queue background fact extraction for the user message + response
+      5. Queue background: fact extraction + Hebbian update + consolidation check
     """
     candidates = []
     retrieval_reason = "default"
+    retrieved_node_ids = []
 
     if use_necessity_heuristic:
         heuristic = RetrievalNecessityHeuristic()
@@ -152,8 +160,42 @@ def run_pipeline(
             candidates = []
         else:
             candidates = retriever.retrieve(user_input)
+            retrieved_node_ids = [c.get("node_id") for c in candidates if c.get("node_id")]
     else:
         candidates = retriever.retrieve(user_input)
+        retrieved_node_ids = [c.get("node_id") for c in candidates if c.get("node_id")]
+
+    if rl_agent is not None and retrieved_node_ids:
+        print(DIM + "  [rl] using RL agent for selection" + RESET)
+        from dataclasses import dataclass
+        from core.rl.agent import RetrievalResult as RLRetrievalResult
+        import numpy as np
+        
+        rl_result = RLRetrievalResult(
+            candidates=[
+                {"node_id": c.get("node_id", ""), "text": c.get("text", ""),
+                 "domain": c.get("domain", ""), "tier": c.get("tier", 3),
+                 "score": c.get("score", 0), "hebbian": 0.5, "last_accessed": ""}
+                for c in candidates
+            ],
+            context_str=user_input[:200]
+        )
+        
+        try:
+            query_emb = retriever._query_embedding if hasattr(retriever, '_query_embedding') else None
+            if query_emb is None:
+                query_emb = retriever.classifier._embed([user_input])[0]
+            query_emb = np.array(query_emb, dtype=np.float32)
+            
+            token_budget = state.get("rl_token_budget", 512)
+            selected = rl_agent.select(rl_result, query_emb, token_budget)
+            
+            candidates = selected if selected else candidates
+            print(DIM + f"  [rl] selected {len(candidates)} candidates" + RESET)
+        except Exception as e:
+            print(DIM + f"  [rl] selection failed, using default: {e}" + RESET)
+
+    state["retrieval_count"] = state.get("retrieval_count", 0) + 1
 
     # Step 2 — greedy pack
     packed = pack_context(candidates, token_budget=TOKEN_BUDGET)
@@ -164,13 +206,41 @@ def run_pipeline(
     # Step 4 — call Ollama
     response = call_llm(prompt=prompt, model=model)
 
-    # Step 5 — save the exchange as extracted facts (background, non-blocking)
+    # Step 5 — background tasks (non-blocking)
     if extraction_enabled:
         exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
         try:
             extractor.start_background_extraction(exchange)
         except Exception as e:
             print(DIM + f"  [warn] background extraction failed: {e}" + RESET)
+
+        if retrieved_node_ids and len(retrieved_node_ids) >= 2:
+            try:
+                hebbian.update_after_retrieval(retrieved_node_ids)
+                print(DIM + f"  [hebbian] updated {len(retrieved_node_ids)} nodes" + RESET)
+            except Exception as e:
+                print(DIM + f"  [hebbian] update failed: {e}" + RESET)
+
+        consolidation_config = get_config().get_section("consolidation")
+        if consolidation_config.get("enabled", True):
+            run_every_n = consolidation_config.get("run_every_n_additions", 30)
+            state["addition_count"] = state.get("addition_count", 0) + 1
+            if consolidator.should_run(state["addition_count"], run_every_n):
+                try:
+                    consolidator.run()
+                    print(DIM + f"  [consolidator] ran at addition #{state['addition_count']}" + RESET)
+                except Exception as e:
+                    print(DIM + f"  [consolidator] failed: {e}" + RESET)
+
+        hebbian_config = get_config().get_section("hebbian")
+        if hebbian_config.get("enabled", True):
+            decay_interval = hebbian_config.get("decay_interval_retrievals", 100)
+            if state.get("retrieval_count", 0) % decay_interval == 0 and state.get("retrieval_count", 0) > 0:
+                try:
+                    decayed = hebbian.apply_decay()
+                    print(DIM + f"  [hebbian] decay applied to {decayed} edges" + RESET)
+                except Exception as e:
+                    print(DIM + f"  [hebbian] decay failed: {e}" + RESET)
 
     return response.text
 
@@ -179,10 +249,10 @@ def run_pipeline(
 # STARTUP
 # ─────────────────────────────────────────────
 
-def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, str]:
+def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, HebbianUpdater, MemoryConsolidator, RLAgent, str, dict]:
     """
     Load config, initialize the graph memory stack, verify Ollama is running.
-    Returns (graph_manager, retriever, extractor, model_name).
+    Returns (graph_manager, retriever, extractor, hebbian, consolidator, rl_agent, model_name, state).
     """
     config = load_config()
     model   = config.get("LLM_MODEL", "mistral:7b-instruct")
@@ -216,8 +286,29 @@ def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, str]:
     classifier = MemoryClassifier(confidence_threshold=threshold)
     retriever  = GraphRetriever(gm, classifier=classifier)
     extractor  = MemoryExtractor(gm, classifier=classifier, ollama_model=model)
+    
+    hebbian = HebbianUpdater(gm)
+    consolidator = MemoryConsolidator(gm)
+    
+    rl_agent = None
+    if config.get("rl", "enabled", False):
+        try:
+            rl_agent = RLAgent()
+            if not rl_agent.is_available():
+                rl_agent = None
+                print(DIM + "  [rl] model not available, using default selection" + RESET)
+            else:
+                print(DIM + "  [rl] RL agent loaded successfully" + RESET)
+        except Exception as e:
+            print(DIM + f"  [rl] failed to load: {e}" + RESET)
+            rl_agent = None
+    
+    state = {
+        "addition_count": 0,
+        "retrieval_count": 0,
+    }
 
-    return gm, retriever, extractor, model
+    return gm, retriever, extractor, hebbian, consolidator, rl_agent, model, state
 
 
 # ─────────────────────────────────────────────
@@ -229,11 +320,17 @@ def main():
     print_logo()
 
     print(DIM + "  initializing..." + RESET)
-    gm, retriever, extractor, model = startup()
+    gm, retriever, extractor, hebbian, consolidator, rl_agent, model, state = startup()
 
     def render_banner():
         print_logo()
         print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
+        active_components = []
+        if rl_agent and rl_agent.is_available():
+            active_components.append("RL")
+        active_components.append("Hebbian")
+        active_components.append("Consolidation")
+        print(DIM + f"  components: {', '.join(active_components)}" + RESET)
 
     clear_screen()
     render_banner()
@@ -263,6 +360,10 @@ def main():
                 user_input=user_input,
                 retriever=retriever,
                 extractor=extractor,
+                hebbian=hebbian,
+                consolidator=consolidator,
+                rl_agent=rl_agent,
+                state=state,
                 model=model,
                 extraction_enabled=handler.extraction_enabled,
             )
