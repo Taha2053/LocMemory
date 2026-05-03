@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils"
 const links = [
   { to: "/graph",     label: "Graph",     icon: Network,       id: "01", desc: "Neural map" },
   { to: "/memories",  label: "Memories",  icon: FileText,      id: "02", desc: "Memory store" },
+  { to: "/chat",      label: "Chat",      icon: MessageSquare, id: "05", desc: "Memory-augmented LLM" },
   { to: "/domains",   label: "Domains",   icon: FolderTree,    id: "03", desc: "Knowledge tree" },
   { to: "/retrieval", label: "Retrieval", icon: Search,        id: "04", desc: "Query engine" },
-  { to: "/chat",      label: "Chat",      icon: MessageSquare, id: "05", desc: "Memory-augmented LLM" },
   { to: "/metrics",   label: "Metrics",   icon: BarChart2,     id: "06", desc: "Quality analytics" },
   { to: "/settings",  label: "Settings",  icon: Settings,      id: "07", desc: "Config" },
   { to: "/guide",     label: "Guide",     icon: BookOpen,      id: "08", desc: "How it works" },

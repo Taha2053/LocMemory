@@ -14,6 +14,7 @@ import {
   InstancedMesh,
   MeshBasicMaterial,
   AdditiveBlending,
+  NormalBlending,
   LineSegments,
   LineBasicMaterial,
   Float32BufferAttribute,
@@ -22,6 +23,8 @@ import {
   CanvasTexture,
   Points,
   PointsMaterial,
+  BackSide,
+  FrontSide,
 } from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
@@ -72,23 +75,19 @@ function hashId(str: string): number {
 }
 
 // Base scale in world units — using unit PlaneGeometry(1,1)
-const MARKER_BASE_SCALE = 0.05
+const MARKER_BASE_SCALE = 0.045
 const ZOOM_DISTANCE = 0.35
-// Scale nodes inward so they sit inside the brain boundary
-const INWARD_SCALE = 0.78
+// Pull every node this fraction of the way from the surface vertex toward the
+// brain centroid, guaranteeing the marker + its halo stay inside the wireframe.
+// 0.30 = 30% inward — enough headroom for the 6× bloom halo without making
+// nodes feel detached from the cortex.
+const INWARD_PULL = 0.32
 const DEFAULT_CAM_Z = 1.9
 const DEFAULT_CAM_Z_MOBILE = 2.9
 
-// Clamp position to stay within brain bounding sphere
-function clampToBrainSphere(pos: Vector3, center: Vector3, radius: number): Vector3 {
-  const scaledRadius = radius * INWARD_SCALE
-  const toPos = pos.clone().sub(center)
-  const dist = toPos.length()
-  if (dist > scaledRadius) {
-    toPos.normalize().multiplyScalar(scaledRadius)
-    return center.clone().add(toPos)
-  }
-  return pos.clone()
+// Pull a surface vertex inward toward centroid by INWARD_PULL fraction.
+function pullInside(pos: Vector3, center: Vector3): Vector3 {
+  return pos.clone().lerp(center, INWARD_PULL)
 }
 
 interface BrainSceneProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -179,6 +178,8 @@ export function BrainScene({
 
     // Brain visual refs
     let brainWireframe: LineSegments | null = null
+    let brainHullInner: Mesh | null = null
+    let brainHullOuter: Mesh | null = null
     let brainDots: Points | null = null
     let stars: Points | null = null
     // Stencil clipping group for nodes/edges
@@ -243,14 +244,28 @@ export function BrainScene({
       const focused = newIdx >= 0
       if (brainWireframe) {
         gsap.to(brainWireframe.material as LineBasicMaterial, {
-          opacity: focused ? 0.06 : 0.15,
+          opacity: focused ? 0.08 : 0.22,
           duration: 0.7,
           ease: "power2.out",
         })
       }
       if (brainDots) {
         gsap.to(brainDots.material as PointsMaterial, {
-          opacity: focused ? 0.15 : 0.85,
+          opacity: focused ? 0.18 : 0.9,
+          duration: 0.7,
+          ease: "power2.out",
+        })
+      }
+      if (brainHullInner) {
+        gsap.to((brainHullInner.material as MeshBasicMaterial), {
+          opacity: focused ? 0.25 : 0.55,
+          duration: 0.7,
+          ease: "power2.out",
+        })
+      }
+      if (brainHullOuter) {
+        gsap.to((brainHullOuter.material as MeshBasicMaterial), {
+          opacity: focused ? 0.025 : 0.06,
           duration: 0.7,
           ease: "power2.out",
         })
@@ -337,12 +352,20 @@ export function BrainScene({
       if (disposed) return
       controls.update()
 
-      // Slow Y rotation
+      // Slow Y rotation — keep brain shells in lockstep
       if (brainWireframe) brainWireframe.rotation.y += 0.0008
       if (brainDots) brainDots.rotation.y += 0.0008
+      if (brainHullInner) brainHullInner.rotation.y += 0.0008
+      if (brainHullOuter) brainHullOuter.rotation.y += 0.0008
       if (stars) {
         stars.rotation.y -= 0.0002
         stars.rotation.x += 0.0001
+      }
+
+      // Slow atmospheric breath on the outer halo (~5s cycle)
+      if (brainHullOuter) {
+        const breath = 1.0 + 0.012 * Math.sin((Date.now() / 2500) * Math.PI)
+        brainHullOuter.scale.setScalar(1.015 * breath)
       }
 
       // Update hover scale in baseScales
@@ -383,7 +406,7 @@ export function BrainScene({
 
           // Outer feathered bloom (6× larger)
           if (bloomMesh) {
-            tmpObj.scale.setScalar(s * 6.0)
+            tmpObj.scale.setScalar(s * 4.2)
             tmpObj.updateMatrix()
             bloomMesh.setMatrixAt(i, tmpObj.matrix)
           }
@@ -404,13 +427,47 @@ export function BrainScene({
       if (disposed) return
       const brainMesh = gltf.scene.children[0] as Mesh
 
+      // ── Inner translucent hull (gives the brain real volume / depth) ──
+      // Backside rendering only — front faces are skipped so the wireframe and
+      // nodes inside are not occluded. The dark teal interior reads as
+      // bioluminescent depth behind the cortex pattern.
+      const innerHullMat = new MeshBasicMaterial({
+        color: new Color(0x00332b),
+        transparent: true,
+        opacity: 0.55,
+        side: BackSide,
+        depthWrite: false,
+        blending: NormalBlending,
+      })
+      brainHullInner = new Mesh(brainMesh.geometry, innerHullMat)
+      brainHullInner.scale.setScalar(0.99)
+      brainHullInner.renderOrder = -2
+      scene.add(brainHullInner)
+
+      // ── Outer atmospheric shell (subtle fresnel-like emerald glow) ──
+      // Front-side, additive — adds a gentle halo on the brain silhouette
+      // that breathes with the pulse animation.
+      const outerHullMat = new MeshBasicMaterial({
+        color: new Color(0x00b87a),
+        transparent: true,
+        opacity: 0.06,
+        side: FrontSide,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      })
+      brainHullOuter = new Mesh(brainMesh.geometry, outerHullMat)
+      brainHullOuter.scale.setScalar(1.015)
+      brainHullOuter.renderOrder = -1
+      scene.add(brainHullOuter)
+
       // ── Wireframe brain mesh (bioluminescent emerald green) ──
       const wireGeo = new WireframeGeometry(brainMesh.geometry)
       const wireMat = new LineBasicMaterial({
         color: new Color(0x00ff88),
         transparent: true,
-        opacity: 0.15,
+        opacity: 0.22,
         depthWrite: false,
+        blending: AdditiveBlending,
       })
       brainWireframe = new LineSegments(wireGeo, wireMat)
       scene.add(brainWireframe)
@@ -419,10 +476,10 @@ export function BrainScene({
       const dotsGeo = new BufferGeometry()
       dotsGeo.setAttribute("position", brainMesh.geometry.getAttribute("position").clone())
       const dotsMat = new PointsMaterial({
-        color: new Color(0x00ff88),
-        size: 0.010,
+        color: new Color(0x6effb8),
+        size: 0.012,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.9,
         blending: AdditiveBlending,
         depthWrite: false,
         sizeAttenuation: true,
@@ -463,19 +520,30 @@ export function BrainScene({
           const positionsArr = brainMesh.geometry.attributes.position.array
           const positionCount = positionsArr.length / 3
 
-          // Compute bounding sphere from brain mesh for containment
-          const posArray = positionsArr as unknown as { length: number; [i: number]: number }
-          let minX = Infinity, maxX = -Infinity
-          let minY = Infinity, maxY = -Infinity
-          let minZ = Infinity, maxZ = -Infinity
+          // Centroid = mean of vertex positions (more robust than bbox center
+          // for irregular shapes).
+          let cx = 0, cy = 0, cz = 0
           for (let i = 0; i < positionCount; i++) {
-            const x = posArray[i * 3], y = posArray[i * 3 + 1], z = posArray[i * 3 + 2]
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x)
-            minY = Math.min(minY, y); maxY = Math.max(maxY, y)
-            minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z)
+            cx += positionsArr[i * 3]
+            cy += positionsArr[i * 3 + 1]
+            cz += positionsArr[i * 3 + 2]
           }
-          const brainCenter = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
-          const brainRadius = Math.max(maxX - minX, maxY - minY, maxZ - minZ) / 2
+          const brainCenter = new Vector3(cx / positionCount, cy / positionCount, cz / positionCount)
+
+          // Robust "safe shell" radius: take the 70th-percentile distance from
+          // centroid across all vertices. Stray geometry (brain-stem, optic
+          // nerves, modeling outliers) sits beyond this; the dense cortex hull
+          // sits inside. Anything we sample beyond safeRadius gets pulled
+          // back along its own direction so it lands on the cortex envelope.
+          const dists = new Float32Array(positionCount)
+          for (let i = 0; i < positionCount; i++) {
+            const dx = positionsArr[i * 3] - brainCenter.x
+            const dy = positionsArr[i * 3 + 1] - brainCenter.y
+            const dz = positionsArr[i * 3 + 2] - brainCenter.z
+            dists[i] = Math.sqrt(dx * dx + dy * dy + dz * dz)
+          }
+          const sorted = Array.from(dists).sort((a, b) => a - b)
+          const safeRadius = sorted[Math.floor(sorted.length * 0.70)]
 
           nodeIds = nodes.map((n) => n.id)
           nodes.forEach((n, i) => {
@@ -488,9 +556,18 @@ export function BrainScene({
               positionsArr[vIdx * 3 + 1],
               positionsArr[vIdx * 3 + 2],
             )
-            // Clamp to brain sphere to ensure nodes stay inside boundary
-            const clampedPos = clampToBrainSphere(rawPos, brainCenter, brainRadius)
-            nodePositions.push(clampedPos)
+
+            // Step 1 — clamp to the safe cortex shell along the outward dir.
+            const offset = rawPos.clone().sub(brainCenter)
+            const d = offset.length()
+            if (d > safeRadius) {
+              offset.multiplyScalar(safeRadius / d)
+            }
+            const onShell = brainCenter.clone().add(offset)
+
+            // Step 2 — pull inward from the shell toward centroid so the 4.2×
+            // bloom halo stays inside the wireframe.
+            nodePositions.push(pullInside(onShell, brainCenter))
           })
 
           // Shared unit plane — actual world size set via scale in animate loop
@@ -550,7 +627,7 @@ export function BrainScene({
             tmpObj.scale.setScalar(MARKER_BASE_SCALE * 2.5)
             tmpObj.updateMatrix()
             haloMesh.setMatrixAt(i, tmpObj.matrix)
-            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 6.0)
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 4.2)
             tmpObj.updateMatrix()
             bloomMesh.setMatrixAt(i, tmpObj.matrix)
           }
@@ -631,6 +708,14 @@ export function BrainScene({
         brainWireframe.geometry.dispose()
         ;(brainWireframe.material as LineBasicMaterial).dispose()
         scene.remove(brainWireframe)
+      }
+      if (brainHullInner) {
+        ;(brainHullInner.material as MeshBasicMaterial).dispose()
+        scene.remove(brainHullInner)
+      }
+      if (brainHullOuter) {
+        ;(brainHullOuter.material as MeshBasicMaterial).dispose()
+        scene.remove(brainHullOuter)
       }
       if (brainDots) {
         brainDots.geometry.dispose()
