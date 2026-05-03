@@ -9,6 +9,7 @@ import { DomainsPage } from "@/pages/domains"
 import { RetrievalPage } from "@/pages/retrieval"
 import { SettingsPage } from "@/pages/settings"
 import { MetricsPage } from "@/pages/metrics"
+import { GuidePage } from "@/pages/guide"
 import { MatrixIntro } from "@/components/MatrixIntro"
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="/retrieval" element={<RetrievalPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/metrics" element={<MetricsPage />} />
+              <Route path="/guide" element={<GuidePage />} />
             </Route>
           </Routes>
         </BrowserRouter>

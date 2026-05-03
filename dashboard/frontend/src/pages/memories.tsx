@@ -16,6 +16,7 @@ export function MemoriesPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState("")
   const [activeDomain, setActiveDomain] = useState<string | null>(null)
+  const [activeSubdomain, setActiveSubdomain] = useState<string | null>(null)
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set())
   const [activeTier, setActiveTier] = useState<number | null>(null)
   const [page, setPage] = useState(0)
@@ -36,8 +37,9 @@ export function MemoriesPage() {
   const loadMemories = useCallback(
     (reset = false) => {
       const pageNum = reset ? 0 : page
-      const params: { domain?: string; q?: string; tier?: number } = {}
+      const params: { domain?: string; subdomain?: string; q?: string; tier?: number } = {}
       if (activeDomain) params.domain = activeDomain
+      if (activeSubdomain) params.subdomain = activeSubdomain
       if (search) params.q = search
       if (activeTier !== null) params.tier = activeTier
       const loader = reset ? setLoading : setLoadingMore
@@ -49,13 +51,13 @@ export function MemoriesPage() {
         })
         .finally(() => loader(false))
     },
-    [page, activeDomain, search, activeTier]
+    [page, activeDomain, activeSubdomain, search, activeTier]
   )
 
   useEffect(() => {
     setPage(0)
     loadMemories(true)
-  }, [activeDomain, search, activeTier])
+  }, [activeDomain, activeSubdomain, search, activeTier])
 
   useEffect(() => {
     if (!search && !activeDomain) {
@@ -127,6 +129,7 @@ export function MemoriesPage() {
                 <button
                   onClick={() => {
                     setActiveDomain(isActive ? null : domain.name)
+                    if (isActive) setActiveSubdomain(null)
                     toggleDomain(domain.name)
                   }}
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-[10px] uppercase tracking-wider transition-all rounded-sm"
@@ -149,17 +152,24 @@ export function MemoriesPage() {
                 </button>
 
                 <div className={`ml-4 overflow-hidden transition-all ${isExpanded || isActive ? "max-h-40" : "max-h-0"}`}>
-                  {domain.subdomains?.map((sub) => (
-                    <button
-                      key={sub.name}
-                      onClick={() => setActiveDomain(sub.name)}
-                      className="w-full text-left px-2 py-1 text-[9px] text-neutral-600 hover:text-emerald-300 transition-colors flex items-center gap-1.5"
-                    >
-                      <div className="h-px w-3" style={{ background: `${color}30` }} />
-                      <span className="truncate">{sub.name}</span>
-                      <span className="ml-auto text-neutral-700">{sub.count}</span>
-                    </button>
-                  ))}
+                  {domain.subdomains?.map((sub) => {
+                    const isSubActive = activeSubdomain === sub.name
+                    return (
+                      <button
+                        key={sub.name}
+                        onClick={() => {
+                          setActiveDomain(domain.name)
+                          setActiveSubdomain(sub.name)
+                        }}
+                        className="w-full text-left px-2 py-1 text-[9px] transition-colors flex items-center gap-1.5"
+                        style={{ color: isSubActive ? color : "#525252" }}
+                      >
+                        <div className="h-px w-3" style={{ background: `${color}30` }} />
+                        <span className="truncate">{sub.name}</span>
+                        <span className="ml-auto" style={{ color: isSubActive ? color : "#404040" }}>{sub.count}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -169,7 +179,7 @@ export function MemoriesPage() {
         {activeDomain && (
           <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0, 255, 136,0.08)" }}>
             <button
-              onClick={() => setActiveDomain(null)}
+              onClick={() => { setActiveDomain(null); setActiveSubdomain(null) }}
               className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors"
             >
               <X className="w-3 h-3" /> CLEAR FILTER
