@@ -21,6 +21,7 @@ from core.memory import (
     GraphManager,
     GraphRetriever,
     MemoryClassifier,
+    MemoryExtractor,
     HebbianUpdater,
     MemoryConsolidator,
     ProceduralDetector,
@@ -42,6 +43,7 @@ state: dict = {
     "gm": None,
     "retriever": None,
     "classifier": None,
+    "extractor": None,
     "hebbian": None,
     "consolidator": None,
     "procedural": None,
@@ -111,9 +113,20 @@ async def lifespan(app: FastAPI):
     log_path = PROJECT_ROOT / "data" / "retrieval_log.csv"
     retrieval_logger = get_logger(log_path)
 
+    try:
+        from core.llm import load_config as _load_llm_config
+        _llm_cfg = _load_llm_config()
+        _llm_model = _llm_cfg.get("LLM_MODEL", "mistral:7b-instruct")
+        extractor = MemoryExtractor(gm, classifier=classifier, ollama_model=_llm_model)
+        print(f"[dashboard] extractor initialized (model: {_llm_model})")
+    except Exception as _e:
+        extractor = None
+        print(f"[dashboard] extractor init failed (chat extraction disabled): {_e}")
+
     state["gm"]          = gm
     state["classifier"]  = classifier
     state["retriever"]   = retriever
+    state["extractor"]   = extractor
     state["hebbian"]     = hebbian
     state["consolidator"] = consolidator
     state["procedural"]  = procedural
@@ -171,6 +184,13 @@ class ConfigUpdate(BaseModel):
 
 # ─────────────────────────── background helpers ───────────────────────────
 
+def _extract_bg(exchange: str, extractor) -> None:
+    try:
+        extractor.start_background_extraction(exchange)
+    except Exception as e:
+        print(f"[extractor] background error: {e}")
+
+
 def _hebbian_bg(node_ids: list[str]) -> None:
     hebbian: HebbianUpdater = state["hebbian"]
     if hebbian and node_ids:
@@ -207,6 +227,11 @@ def _maybe_detect_patterns() -> None:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/debug/routes")
+def debug_routes():
+    return [{"path": r.path, "methods": list(r.methods)} for r in app.routes if hasattr(r, "methods")]
 
 
 # ─────────────────────────── /api/rl ───────────────────────────
@@ -858,3 +883,110 @@ def update_config_api(body: ConfigUpdate):
     cfg.update(body.data)
     cfg.save()
     return {"ok": True, "data": cfg.as_dict()}
+
+
+# ─────────────────────────── /api/chat ───────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[list[ChatMessage]] = None
+
+
+@app.post("/api/chat")
+def chat(req: ChatRequest, background_tasks: BackgroundTasks):
+    """
+    Single chat turn: retrieve memories → build prompt → call LLM → return response.
+    Fires background extraction + Hebbian update after responding.
+    """
+    import time
+    import math
+    from core.context import pack_context
+    from core.llm import call_llm
+
+    retriever: GraphRetriever = state["retriever"]
+    extractor = state.get("extractor")
+
+    def safe_float(v) -> float:
+        try:
+            f = float(v)
+            return 0.0 if math.isnan(f) or math.isinf(f) else f
+        except Exception:
+            return 0.0
+
+    t0 = time.monotonic()
+    candidates = retriever.retrieve(req.message)
+    retrieval_ms = (time.monotonic() - t0) * 1000
+
+    packed = pack_context(candidates, token_budget=500)
+
+    tier_names = {1: "context", 2: "anchor", 3: "leaf", 4: "procedural"}
+    if packed:
+        memory_lines = [
+            f"[{i}] [{tier_names.get(m.get('tier', 3), 'leaf').upper()}/{m.get('domain') or 'general'}]"
+            f" (relevance: {m['score']:.2f})\n    {m['text']}"
+            for i, m in enumerate(packed, 1)
+        ]
+        context_section = (
+            f"--- MEMORY CONTEXT ({len(packed)} memories) ---\n"
+            + "\n\n".join(memory_lines)
+            + "\n--- END OF MEMORY CONTEXT ---"
+        )
+    else:
+        context_section = (
+            "--- MEMORY CONTEXT ---\nNo relevant memories found.\n--- END OF MEMORY CONTEXT ---"
+        )
+
+    history_lines = [
+        f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}"
+        for m in (req.history or [])[-10:]
+    ]
+    history_section = (
+        "\n--- CONVERSATION HISTORY ---\n" + "\n".join(history_lines) + "\n--- END ---"
+        if history_lines else ""
+    )
+
+    system = (
+        "You are a helpful personal assistant with persistent memory.\n"
+        "Use the MEMORY CONTEXT only when it is directly relevant to the current message.\n"
+        "Ignore unrelated memories. If none are relevant, answer from general knowledge.\n"
+    )
+    prompt = (
+        f"{system}\n{context_section}\n{history_section}\n"
+        f"--- CURRENT MESSAGE ---\n{req.message}\n--- END ---"
+    )
+
+    try:
+        llm_resp = call_llm(prompt=prompt)
+        response_text = llm_resp.text.strip()
+        model_name = llm_resp.model
+        tokens = {"input": llm_resp.input_tokens, "output": llm_resp.output_tokens}
+    except Exception as e:
+        raise HTTPException(503, f"LLM unavailable: {e}")
+
+    if extractor:
+        exchange = f"User: {req.message}\nAssistant: {response_text}"
+        background_tasks.add_task(_extract_bg, exchange, extractor)
+
+    retrieved_ids = [c.get("node_id") for c in candidates if c.get("node_id")]
+    if retrieved_ids:
+        background_tasks.add_task(_hebbian_bg, retrieved_ids)
+        background_tasks.add_task(_maybe_detect_patterns)
+
+    for m in packed:
+        for field in ("score", "cosine", "recency", "category",
+                      "cosine_contribution", "recency_contribution", "category_contribution"):
+            if field in m:
+                m[field] = safe_float(m[field])
+
+    return {
+        "response": response_text,
+        "memories_used": packed,
+        "model": model_name,
+        "tokens": tokens,
+        "retrieval_ms": round(retrieval_ms, 1),
+    }

@@ -52,6 +52,19 @@ export interface Domain {
   subdomains: { name: string; count: number }[]
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
+}
+
+export interface ChatResponse {
+  response: string
+  memories_used: RetrievedResult[]
+  model: string
+  tokens: { input: number; output: number }
+  retrieval_ms: number
+}
+
 export interface RetrievedResult {
   node_id: string
   text: string
@@ -200,6 +213,12 @@ export const api = {
   }> => fetch(`${BASE}/rl/train/status`).then((r) => j(r)),
   rlReload: (): Promise<{ ok: boolean; available: boolean; message: string }> =>
     fetch(`${BASE}/rl/reload`, { method: "POST" }).then((r) => j(r)),
+  chat: (message: string, history: ChatMessage[] = []): Promise<ChatResponse> =>
+    fetch(`${BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history }),
+    }).then((r) => j<ChatResponse>(r)),
   compareRetrieve: (query: string, limit = 5): Promise<{
     query: string
     query_domain: string
