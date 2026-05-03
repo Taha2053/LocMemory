@@ -381,7 +381,14 @@ class GraphRetriever:
             )
 
             # Use RL agent to select
-            selected = self._rl_agent.select(result, query_emb, token_budget)
+            selected_dicts = self._rl_agent.select(result, query_emb, token_budget)
+
+            if not selected_dicts:
+                return candidates
+
+            # Map selected node_ids back to original RetrievedMemory objects
+            selected_ids = {d["node_id"] for d in selected_dicts}
+            selected = [c for c in candidates if c.node_id in selected_ids]
 
             return selected if selected else candidates
 

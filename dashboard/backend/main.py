@@ -609,10 +609,18 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
     Optionally returns rejected candidates when RL agent is enabled.
     """
     import time
+    import math
     retriever: GraphRetriever = state["retriever"]
     logger: RetrievalLogger = state["logger"]
     rl_agent = state.get("rl_agent")
     encryptor = state.get("encryptor")
+
+    def safe_float(v) -> float:
+        try:
+            f = float(v)
+            return 0.0 if math.isnan(f) or math.isinf(f) else f
+        except Exception:
+            return 0.0
 
     t0 = time.monotonic()
     results = retriever.retrieve(req.query)
@@ -621,6 +629,10 @@ def retrieve(req: RetrieveRequest, background_tasks: BackgroundTasks):
     def add_encrypted(item):
         text = item.get("text", "")
         item["is_encrypted"] = encryptor.is_encrypted(text) if encryptor else False
+        for field in ("score", "cosine", "recency", "category",
+                      "cosine_contribution", "recency_contribution", "category_contribution"):
+            if field in item:
+                item[field] = safe_float(item[field])
         return item
 
     top = [add_encrypted(r) for r in results[: req.limit]]
