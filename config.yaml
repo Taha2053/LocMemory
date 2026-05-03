@@ -82,6 +82,7 @@ hebbian:
   learning_rate: 0.2
   max_edge_weight: 5.0
   min_edge_weight: 0.01
+  decay_interval_retrievals: 100
 
 consolidation:
   enabled: true

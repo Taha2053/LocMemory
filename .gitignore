@@ -15,6 +15,7 @@ dashboard/frontend/node_modules/
 *.lock
 package-lock.json
 dashboard/frontend/package-lock.json
+generate_figures.py
 
 # Build outputs
 build/
@@ -32,3 +33,4 @@ docs/
 # Ignore secret key
 data/secret.key
 data/rl_agent.zip
+*png
