@@ -36,22 +36,40 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 0 0% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 160 80% 40%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 160 80% 40%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 160 80% 40%;
     --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 180 100% 3%;
+    --foreground: 210 40% 98%;
+    --card: 180 100% 5%;
+    --card-foreground: 210 40% 98%;
+    --primary: 160 100% 50%;
+    --primary-foreground: 180 100% 3%;
+    --secondary: 180 100% 8%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 180 100% 8%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 160 100% 50%;
+    --accent-foreground: 180 100% 3%;
+    --border: 180 100% 15%;
+    --input: 180 100% 15%;
+    --ring: 160 100% 50%;
   }
 
   * { @apply border-border; }
@@ -378,4 +396,28 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Custom scrollbar - LocMemory dark green theme */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #00ff88 #0a1a0f;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0a1a0f;
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #00ff88;
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #00cc66;
 }

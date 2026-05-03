@@ -169,7 +169,7 @@ export function SettingsPage() {
     draft?.[section]?.[key] ?? fallback
 
   return (
-    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
+    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
       <ScanlineOverlay />
 
       {/* Ambient */}
@@ -188,7 +188,7 @@ export function SettingsPage() {
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.CONFIG</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Settings</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
             style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.4)" }}>

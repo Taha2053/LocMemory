@@ -1,21 +1,18 @@
 # core/llm.py
 # ─────────────────────────────────────────────
-# LLM caller — model-agnostic Ollama backend
-# Sits between context.py (prompt builder) and chat.py (terminal loop)
+# Multi-backend LLM caller
+# Supported providers: ollama | huggingface | anthropic
 #
-# Main responsibilities:
-#   1. Connect to local Ollama server
-#   2. Send the prompt built by context.py to the model
-#   3. Return the response + exact token usage stats
+# Provider is read from config.yaml → models.llm.provider
+# (defaults to "ollama" for backwards compatibility).
 #
-# Design principles:
-#   - Model-agnostic: model name comes from config.yaml, not hardcoded
-#   - Fully local: zero internet, zero API keys
-#   - Graceful errors: clear messages if Ollama is not running or model not pulled
+# All backends return the same LLMResponse dataclass so the rest of
+# the codebase (chat.py, context.py, etc.) needs zero changes.
 # ─────────────────────────────────────────────
 
-import ollama
+import os
 import yaml
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -25,15 +22,8 @@ from pathlib import Path
 
 def load_config(config_path: str = "config.yaml") -> dict:
     """
-    Load configuration from the root config.yaml used by the cognitive
-    memory system and flatten the keys most frequently used by chat.py.
-
-    The underlying YAML is nested (models.llm.model, storage.sqlite_db_path,
-    ...). To keep backward-compat with callers expecting flat keys, we also
-    expose LLM_MODEL, DB_PATH, MEMORIES_DIRECTORY on the returned dict.
-
-    Returns:
-        config dict with both the nested sections AND flat convenience keys.
+    Load configuration from config.yaml and expose flat convenience keys.
+    Backwards-compatible: always sets LLM_MODEL, DB_PATH, MEMORIES_DIRECTORY.
     """
     path = Path(config_path)
     if not path.exists():
@@ -54,29 +44,15 @@ def load_config(config_path: str = "config.yaml") -> dict:
     data["MEMORIES_DIRECTORY"] = storage_section.get("memories_directory", "memories/")
 
     return data
-    
-
 
 
 # ─────────────────────────────────────────────
 # 2. LLMResponse dataclass
 # ─────────────────────────────────────────────
 
-from dataclasses import dataclass
-
 @dataclass
 class LLMResponse:
-    """
-    Clean container for everything the LLM returns.
-    Instead of passing raw dicts around, we use a typed object.
-
-    Fields:
-        text          : the actual response text from the model
-        model         : which model generated it (e.g. "mistral:7b-instruct")
-        input_tokens  : exact tokens used for the prompt (from Ollama)
-        output_tokens : exact tokens used for the response (from Ollama)
-        total_tokens  : input + output (useful for logging/dashboard)
-    """
+    """Unified response container for all backends."""
     text:          str
     model:         str
     input_tokens:  int
@@ -85,147 +61,268 @@ class LLMResponse:
 
 
 # ─────────────────────────────────────────────
-# 3. Core LLM caller
+# 3. Backend implementations
 # ─────────────────────────────────────────────
 
-def call_llm(
+def _call_ollama(
     prompt: str,
-    model:  str | None = None,
-    system: str | None = None,
+    model: str,
+    system: str | None,
 ) -> LLMResponse:
-    """
-    Send a prompt to the local Ollama model and return the response.
+    """Call a local Ollama model."""
+    try:
+        import ollama as _ollama
+    except ImportError:
+        raise ImportError(
+            "ollama package not installed. Run: pip install ollama"
+        )
 
-    How it works:
-        1. Load model name from config (or use the one passed in)
-        2. Split the prompt into system + user messages
-           (Ollama chat API expects this format)
-        3. Call ollama.chat() — this talks to the local Ollama server
-        4. Extract response text + exact token counts
-        5. Return everything as a clean LLMResponse object
-
-    Args:
-        prompt : the complete prompt string from context.py
-                 (already contains system instruction + memories + query)
-        model  : optional model override — if None, reads from config.yaml
-        system : optional system message override
-
-    Returns:
-        LLMResponse object with text, model name, and token counts
-
-    Raises:
-        ConnectionError : if Ollama server is not running
-        ValueError      : if the model is not pulled yet
-    """
-    # ── Step 1: Get model name ────────────────
-    # Priority: passed argument > config.yaml > hardcoded default
-    if model is None:
-        config = load_config()
-        model  = config.get("LLM_MODEL", "mistral:7b-instruct")
-
-    # Accept derivative tags — if the exact name is not pulled but a
-    # variant is (e.g. user asked "mistral:7b-instruct" and has
-    # "mistral:7b-instruct-v0.3-q4_0"), use the variant.
+    # Resolve to the exact installed tag if needed
     resolved = resolve_model(model)
     if resolved:
         model = resolved
 
-    # ── Step 2: Build messages list ───────────
-    # Ollama chat() expects a list of {"role": ..., "content": ...} dicts
-    # We split our prompt into:
-    #   - "system" role: instructions + memory context
-    #   - "user" role: the actual user query
-    #
-    # Why split? Because instruct models (like mistral:7b-instruct)
-    # are trained to treat system and user messages differently.
-    # System = persistent instructions, User = current request.
-
     if system:
-        # If a custom system message is provided, use it separately
         messages = [
             {"role": "system", "content": system},
             {"role": "user",   "content": prompt},
         ]
     else:
-        # Otherwise send the full prompt as a single user message
-        # context.py already formats everything cleanly
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
+        messages = [{"role": "user", "content": prompt}]
 
-    # ── Step 3: Call Ollama ───────────────────
     try:
-        response = ollama.chat(
-            model=model,
-            messages=messages,
-        )
-
-    except ollama.ResponseError as e:
-        # Model not found — user needs to pull it first
+        response = _ollama.chat(model=model, messages=messages)
+    except _ollama.ResponseError as e:
         if e.status_code == 404:
             raise ValueError(
                 f"Model '{model}' not found in Ollama.\n"
                 f"Pull it with: ollama pull {model}"
             ) from e
-        raise  # re-raise any other Ollama errors
-
+        raise
     except Exception as e:
-        # Ollama server is probably not running
         raise ConnectionError(
             "Cannot connect to Ollama. Is it running?\n"
             "Start it with: ollama serve"
         ) from e
 
-    # ── Step 4: Extract response + token counts ──
-    # response["message"]["content"] → the actual text response
-    # response["prompt_eval_count"]  → exact input tokens (from Ollama)
-    # response["eval_count"]         → exact output tokens (from Ollama)
-    response_text  = response["message"]["content"]
-    input_tokens   = response.get("prompt_eval_count", 0)
-    output_tokens  = response.get("eval_count", 0)
-    total_tokens   = input_tokens + output_tokens
+    text          = response["message"]["content"]
+    input_tokens  = response.get("prompt_eval_count", 0)
+    output_tokens = response.get("eval_count", 0)
 
-    # ── Step 5: Log stats ─────────────────────
-    print(f"\n[llm.py] Response received")
-    print(f"  Model         : {model}")
-    print(f"  Input tokens  : {input_tokens}")
-    print(f"  Output tokens : {output_tokens}")
-    print(f"  Total tokens  : {total_tokens}")
-    print(f"  Response length: {len(response_text)} chars")
-
-    # ── Step 6: Return clean object ───────────
     return LLMResponse(
-        text=response_text,
+        text=text,
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        total_tokens=total_tokens,
+        total_tokens=input_tokens + output_tokens,
+    )
+
+
+def _call_huggingface(
+    prompt: str,
+    model: str,
+    system: str | None,
+    max_new_tokens: int = 512,
+    temperature: float = 0.3,
+) -> LLMResponse:
+    """
+    Call a HuggingFace model via the transformers text-generation pipeline.
+    The model is downloaded on first use and cached locally by HuggingFace.
+
+    Requires: pip install transformers torch  (or transformers accelerate)
+    """
+    try:
+        from transformers import pipeline as hf_pipeline
+    except ImportError:
+        raise ImportError(
+            "transformers package not installed.\n"
+            "Install it with: pip install transformers torch\n"
+            "Or: uv add --optional huggingface transformers torch"
+        )
+
+    # Build a single string input — HF text-generation expects a prompt string
+    full_prompt = f"{system}\n\n{prompt}" if system else prompt
+
+    pipe = hf_pipeline(
+        "text-generation",
+        model=model,
+        device_map="auto",
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+        do_sample=temperature > 0,
+        pad_token_id=50256,  # EOS token fallback to suppress warnings
+    )
+
+    result = pipe(full_prompt)
+    generated = result[0]["generated_text"]
+
+    # Strip the prompt prefix that some models echo back
+    if generated.startswith(full_prompt):
+        generated = generated[len(full_prompt):].lstrip()
+
+    # Approximate token counts (transformers doesn't always return usage)
+    input_tokens  = len(full_prompt) // 4
+    output_tokens = len(generated) // 4
+
+    return LLMResponse(
+        text=generated,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+    )
+
+
+def _call_anthropic(
+    prompt: str,
+    model: str,
+    system: str | None,
+    max_tokens: int = 1024,
+    temperature: float = 0.3,
+) -> LLMResponse:
+    """
+    Call Anthropic's API (Claude models).
+    Requires ANTHROPIC_API_KEY environment variable.
+
+    Requires: pip install anthropic
+    Or: uv add --optional anthropic anthropic
+    """
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        raise ImportError(
+            "anthropic package not installed.\n"
+            "Install it with: pip install anthropic\n"
+            "Or: uv add --optional anthropic anthropic"
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise EnvironmentError(
+            "ANTHROPIC_API_KEY environment variable not set.\n"
+            "Set it with: export ANTHROPIC_API_KEY=sk-ant-..."
+        )
+
+    client = _anthropic.Anthropic(api_key=api_key)
+
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        kwargs["system"] = system
+
+    response = client.messages.create(**kwargs)
+
+    text          = response.content[0].text
+    input_tokens  = response.usage.input_tokens
+    output_tokens = response.usage.output_tokens
+
+    return LLMResponse(
+        text=text,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
     )
 
 
 # ─────────────────────────────────────────────
-# 4. Model checker utility
+# 4. Core dispatcher
+# ─────────────────────────────────────────────
+
+def call_llm(
+    prompt: str,
+    model: str | None = None,
+    system: str | None = None,
+    provider: str | None = None,
+) -> LLMResponse:
+    """
+    Send a prompt to the configured LLM backend and return the response.
+
+    Provider resolution order:
+        1. `provider` argument (explicit override)
+        2. config.yaml → models.llm.provider
+        3. "ollama" (default)
+
+    Model resolution order:
+        1. `model` argument
+        2. config.yaml → models.llm.model
+        3. Backend-specific default
+
+    Args:
+        prompt   : complete prompt string (from context.py)
+        model    : optional model override
+        system   : optional system message
+        provider : "ollama" | "huggingface" | "anthropic" | None
+
+    Returns:
+        LLMResponse with text, model name, and token counts
+    """
+    config = load_config()
+
+    # Resolve provider
+    if provider is None:
+        llm_cfg  = (config.get("models") or {}).get("llm") or {}
+        provider = llm_cfg.get("provider", "ollama")
+
+    # Resolve model
+    if model is None:
+        model = config.get("LLM_MODEL", "mistral:7b-instruct")
+
+    # Resolve generation params from config
+    llm_cfg       = (config.get("models") or {}).get("llm") or {}
+    temperature   = float(llm_cfg.get("temperature", 0.3))
+    max_tokens    = int(llm_cfg.get("max_tokens", 512))
+
+    provider = provider.lower().strip()
+
+    if provider == "ollama":
+        resp = _call_ollama(prompt, model, system)
+    elif provider in ("huggingface", "hf", "transformers"):
+        resp = _call_huggingface(
+            prompt, model, system,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+        )
+    elif provider in ("anthropic", "claude"):
+        resp = _call_anthropic(
+            prompt, model, system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    else:
+        raise ValueError(
+            f"Unknown LLM provider: '{provider}'. "
+            "Supported: ollama | huggingface | anthropic"
+        )
+
+    print(f"\n[llm.py] Response received")
+    print(f"  Provider      : {provider}")
+    print(f"  Model         : {resp.model}")
+    print(f"  Input tokens  : {resp.input_tokens}")
+    print(f"  Output tokens : {resp.output_tokens}")
+    print(f"  Total tokens  : {resp.total_tokens}")
+    print(f"  Response length: {len(resp.text)} chars")
+
+    return resp
+
+
+# ─────────────────────────────────────────────
+# 5. Ollama utilities (backwards-compatible)
 # ─────────────────────────────────────────────
 
 def resolve_model(model: str) -> str | None:
     """
-    Resolve a requested model name against what Ollama has pulled.
-
-    Accepts any derivative tag that extends the requested base. Examples:
-        requested "mistral:7b-instruct" matches installed
-        "mistral:7b-instruct-v0.3-q4_0", "mistral:7b-instruct-fp16", etc.
-
-    Matching strategy (first hit wins):
-        1. exact match
-        2. installed tag starts with requested name + separator (-, ., :, @)
-        3. requested name starts with installed tag + separator (reverse)
-        4. same base (before ':') and either side's variant is a prefix
-           of the other's variant
-
-    Returns the installed tag to use, or None if nothing matches.
+    Resolve a requested Ollama model name against what is installed.
+    Returns the exact installed tag, or None if nothing matches.
+    Only relevant for the Ollama backend.
     """
     try:
-        models = ollama.list()
+        import ollama as _ollama
+        models    = _ollama.list()
         available = [m.model for m in models.models]
     except Exception:
         return None
@@ -263,26 +360,15 @@ def resolve_model(model: str) -> str | None:
 
 
 def is_model_available(model: str) -> bool:
-    """
-    True if `model` (or any derivative tag of it) is pulled in Ollama.
-    """
+    """True if `model` (or a derivative tag) is pulled in Ollama."""
     return resolve_model(model) is not None
 
 
-# ─────────────────────────────────────────────
-# 5. List available models utility
-# ─────────────────────────────────────────────
-
 def list_available_models() -> list[str]:
-    """
-    Return all models currently pulled in Ollama.
-    Useful for the dashboard and for letting users pick a model.
-
-    Returns:
-        list of model name strings
-    """
+    """Return all models currently pulled in Ollama."""
     try:
-        models = ollama.list()
+        import ollama as _ollama
+        models = _ollama.list()
         return [m.model for m in models.models]
     except Exception:
         return []

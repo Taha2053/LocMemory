@@ -116,7 +116,7 @@ export function MemoryInspector({ memoryId, onClose, onDeleted }: Props) {
               <div className="text-[9px] uppercase tracking-wider text-neutral-500 mb-1.5">
                 neighbors ({data.neighbors.length})
               </div>
-              <div className="space-y-1 max-h-[140px] overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
                 {data.neighbors.length === 0 && (
                   <div className="text-[11px] text-neutral-600 italic">no connections</div>
                 )}

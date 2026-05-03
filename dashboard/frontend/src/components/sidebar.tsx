@@ -66,24 +66,24 @@ export function Sidebar() {
       <div className="pointer-events-none absolute top-2 right-2 h-5 w-5 border-t border-r"
         style={{ borderColor: "rgba(255,77,109,0.35)", filter: "drop-shadow(0 0 3px rgba(255,77,109,0.3))" }} />
 
-      {/* ── Logo ── */}
+      {/* Logo */}
       <div
         className="relative px-5 pt-6 pb-4"
         style={{ borderBottom: "1px solid rgba(0, 196, 188,0.12)" }}
       >
         <div className="flex items-center gap-3 mb-3">
-          <div className="relative shrink-0 h-10 w-10 flex items-center justify-center">
+          <div className="relative shrink-0 h-14 w-14 flex items-center justify-center">
             <img
               src="/logo.png"
               alt="LocMemory logo"
-              className="h-10 w-10 object-contain"
-              style={{ filter: "drop-shadow(0 0 6px rgba(0, 196, 188, 0.6))", mixBlendMode: "screen" }}
+              className="h-14 w-14 object-contain"
+              style={{ filter: "drop-shadow(0 0 8px rgba(0, 196, 188, 0.6))", mixBlendMode: "screen" }}
             />
           </div>
 
-          <div>
+          <div className="pt-1">
             <div
-              className="text-[15px] font-bold tracking-wide text-emerald-300"
+              className="text-[18px] font-bold tracking-wide text-emerald-300"
               style={{ textShadow: "0 0 12px rgba(0, 196, 188,0.6)" }}
             >
               LocMemory
@@ -112,7 +112,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* ── Nav ── */}
+      {/* Nav */}
       <nav className="px-3 py-4 space-y-1">
         <div className="px-2 mb-3 flex items-center gap-2">
           <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.3), transparent)" }} />
@@ -142,7 +142,8 @@ export function Sidebar() {
                 {/* Hover bg */}
                 {!isActive && (
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    style={{ background: "linear-gradient(90deg, rgba(0, 196, 188,0.07), transparent)" }} />
+                    style={{ background: "linear-gradient(90deg, rgba(0, 196, 188,0.07), transparent)" }}
+                  />
                 )}
 
                 {/* Active left bar */}
@@ -194,7 +195,7 @@ export function Sidebar() {
       {/* spacer */}
       <div className="flex-1" />
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <div
         className="px-5 py-2.5 flex items-center justify-between"
         style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}

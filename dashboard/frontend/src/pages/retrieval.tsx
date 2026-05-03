@@ -1,10 +1,32 @@
-﻿import { useState, useEffect } from "react"
-import { api, type RetrieveResponse } from "@/lib/api"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { api, type RetrievedResult, type RetrieveResponse } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
-import { MatrixRain } from "@/components/MatrixRain"
 
-const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
+// ─── Constants ────────────────────────────────────────────────────────────
+const TIER_COLORS: Record<number, string> = {
+  1: "#00ff88",
+  2: "#00e5ff",
+  3: "#aaff00",
+  4: "#ff8c26",
+}
+function tierColor(t: number) { return TIER_COLORS[t] ?? "#00ff88" }
 
+const SCORE_META = [
+  { key: "cosine_contribution",   label: "Semantic",  desc: "Vector similarity — how close the meaning is",   color: "#60a5fa" },
+  { key: "recency_contribution",  label: "Recency",   desc: "Prefers newer memories over older ones",         color: "#34d399" },
+  { key: "category_contribution", label: "Domain",    desc: "Domain/category match with the query",          color: "#a78bfa" },
+] as const
+
+// ─── Pipeline step definitions ─────────────────────────────────────────────
+const STEPS = [
+  { id: "embed",     label: "Embed query",       desc: "Query → semantic vector (embedding model)" },
+  { id: "classify",  label: "Classify domain",   desc: "Detect the knowledge domain of the query" },
+  { id: "pool",      label: "Build candidate pool", desc: "Hybrid score: semantic + recency + domain match" },
+  { id: "rl",        label: "RL reranking",       desc: "Trained agent selects best k from the pool" },
+  { id: "return",    label: "Return results",     desc: "Final ranked list delivered to you" },
+]
+
+// ─── RLStatus type ─────────────────────────────────────────────────────────
 interface RLStatus {
   enabled: boolean
   available: boolean
@@ -15,140 +37,624 @@ interface RLStatus {
   message?: string
 }
 
-interface CompareResult {
-  query: string
-  query_domain: string
-  rl_available: boolean
-  hybrid: api.RetrievedResult[]
-  rl: api.RetrievedResult[]
-  overlap_count: number
-}
+// ─── Animated pipeline ─────────────────────────────────────────────────────
+function PipelineSteps({
+  active,
+  rlAvailable,
+}: {
+  active: boolean
+  rlAvailable: boolean
+}) {
+  const [current, setCurrent] = useState(-1)
 
-function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
-  const pct = Math.max(0, Math.min(100, value * 100))
+  useEffect(() => {
+    if (!active) { setCurrent(-1); return }
+    setCurrent(0)
+    const timings = [300, 700, 1200, 2000]
+    const timers = timings.map((ms, i) =>
+      setTimeout(() => setCurrent(i + 1), ms)
+    )
+    return () => timers.forEach(clearTimeout)
+  }, [active])
+
   return (
-    <div className="flex items-center gap-2 text-[9px]">
-      <span className="text-neutral-600 w-14 uppercase tracking-wider">{label}</span>
-      <div className="flex-1 h-0.5 bg-white/5 overflow-hidden rounded-full">
-        <div
-          className="h-full rounded-full transition-all duration-700 ease-out"
-          style={{ width: `${pct}%`, background: color, boxShadow: `0 0 4px ${color}` }}
-        />
-      </div>
-      <span className="text-neutral-500 w-8 text-right font-mono tabular-nums">{value.toFixed(2)}</span>
+    <div className="space-y-2">
+      {STEPS.map((step, i) => {
+        const isRL = step.id === "rl"
+        const skip = isRL && !rlAvailable
+        const done = current > i
+        const running = current === i && active
+        return (
+          <div
+            key={step.id}
+            className="flex items-start gap-2.5 transition-all duration-300"
+            style={{ opacity: skip ? 0.25 : done || running ? 1 : 0.35 }}
+          >
+            {/* indicator */}
+            <div
+              className="mt-0.5 w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold transition-all duration-500"
+              style={{
+                background: skip
+                  ? "rgba(255,255,255,0.04)"
+                  : done
+                  ? "rgba(0,255,136,0.2)"
+                  : running
+                  ? "rgba(0,255,136,0.1)"
+                  : "rgba(255,255,255,0.04)",
+                border: `1px solid ${
+                  skip
+                    ? "rgba(255,255,255,0.06)"
+                    : done
+                    ? "rgba(0,255,136,0.5)"
+                    : running
+                    ? "rgba(0,255,136,0.3)"
+                    : "rgba(255,255,255,0.1)"
+                }`,
+                boxShadow: running ? "0 0 6px rgba(0,255,136,0.4)" : "none",
+              }}
+            >
+              {done ? (
+                <span style={{ color: "#00ff88" }}>✓</span>
+              ) : running ? (
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                  style={{ animation: "pulse 0.8s ease-in-out infinite" }}
+                />
+              ) : (
+                <span className="text-neutral-700">{i + 1}</span>
+              )}
+            </div>
+
+            <div>
+              <div
+                className="text-[10px] uppercase tracking-wider transition-colors"
+                style={{
+                  color: done ? "#00ff88" : running ? "#6ee7b7" : "#404040",
+                }}
+              >
+                {step.label}
+                {skip && (
+                  <span className="ml-1.5 text-[8px] text-neutral-700 normal-case tracking-normal">skipped</span>
+                )}
+              </div>
+              {(running || done) && !skip && (
+                <div className="text-[9px] text-neutral-600 mt-0.5 leading-relaxed">
+                  {step.desc}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-function ResultCard({ r, idx, rejected = false, compact = false }: { r: api.RetrievedResult; idx: number; rejected?: boolean; compact?: boolean }) {
-  const color = TIER_COLORS[Math.max(0, r.tier - 1)] ?? TIER_COLORS[0]
-  const borderColor = rejected ? "rgba(255,77,109,0.4)" : color
+// ─── RL Panel with training UI ─────────────────────────────────────────────
+function RLPanel({
+  status,
+  onStatusChange,
+}: {
+  status: RLStatus | null
+  onStatusChange: () => void
+}) {
+  const [training, setTraining] = useState<{
+    running: boolean; progress: number; total: number
+    last_reward: number | null; log: string[]; done: boolean; error: string | null
+  } | null>(null)
+  const [reloading, setReloading] = useState(false)
+  const [showLog, setShowLog] = useState(false)
+  const logRef = useRef<HTMLDivElement>(null)
+
+  const pollStatus = useCallback(async () => {
+    try {
+      const s = await api.rlTrainStatus()
+      setTraining(s)
+      if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+      if (!s.running && s.done) {
+        // auto-reload after training finishes
+        setReloading(true)
+        try {
+          await api.rlReload()
+          onStatusChange()
+        } finally {
+          setReloading(false)
+        }
+      }
+    } catch {}
+  }, [onStatusChange])
+
+  // Poll while training
+  useEffect(() => {
+    if (!training?.running) return
+    const id = setInterval(pollStatus, 1500)
+    return () => clearInterval(id)
+  }, [training?.running, pollStatus])
+
+  const startTraining = async () => {
+    const res = await api.rlTrain()
+    if (res.ok) {
+      setShowLog(true)
+      pollStatus()
+    }
+  }
+
+  const cancel = async () => {
+    await api.rlTrainCancel()
+    pollStatus()
+  }
+
+  const reload = async () => {
+    setReloading(true)
+    try {
+      await api.rlReload()
+      onStatusChange()
+    } finally {
+      setReloading(false)
+    }
+  }
+
+  if (!status) return null
+
+  const pct = training && training.total > 0
+    ? Math.round((training.progress / training.total) * 100)
+    : 0
 
   return (
     <div
-      className={`relative rounded-sm overflow-hidden transition-all duration-200 ${rejected ? "opacity-40 cursor-not-allowed" : compact ? "" : "hover:scale-[1.003]"}`}
+      className="rounded-sm p-4 space-y-3"
+      style={{ background: "rgba(0,5,16,0.7)", border: "1px solid rgba(255,255,255,0.06)" }}
+    >
+      {/* Status dot + label */}
+      <div className="flex items-center gap-2">
+        <div
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{
+            background: status.available ? "#00ff88" : status.enabled ? "#f59e0b" : "#525252",
+            boxShadow: status.available
+              ? "0 0 6px rgba(0,255,136,0.7)"
+              : status.enabled
+              ? "0 0 6px rgba(245,158,11,0.5)"
+              : "none",
+          }}
+        />
+        <span
+          className="text-[10px] uppercase tracking-widest font-bold"
+          style={{ color: status.available ? "#00ff88" : status.enabled ? "#f59e0b" : "#525252" }}
+        >
+          {status.available ? "RL Active" : status.enabled ? "Model not trained" : "RL Disabled"}
+        </span>
+      </div>
+
+      {/* Explanation */}
+      <div className="text-[9px] text-neutral-600 leading-relaxed">
+        {status.available ? (
+          <>
+            Trained policy watches top{" "}
+            <span className="text-neutral-400">{status.candidate_pool_size ?? 25}</span> candidates
+            and selects the best <span className="text-neutral-400">{status.top_k ?? 5}</span> based
+            on learned patterns from your ratings.
+          </>
+        ) : status.enabled ? (
+          <>
+            RL is enabled but needs to be trained first. Click{" "}
+            <span className="text-amber-400">Train</span> below — it takes ~2 min.
+            Until then, hybrid scoring is used.
+          </>
+        ) : (
+          <>Hybrid scoring only: cosine + recency + domain. Enable RL in Settings.</>
+        )}
+      </div>
+
+      {/* Config grid when active */}
+      {status.available && (
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: "Pool", value: status.candidate_pool_size ?? 25 },
+            { label: "Top-K", value: status.top_k ?? 5 },
+            { label: "Budget", value: status.token_budget ?? 512 },
+          ].map(({ label, value }) => (
+            <div key={label} className="text-center py-1.5 rounded-sm"
+              style={{ background: "rgba(0,255,136,0.04)", border: "1px solid rgba(0,255,136,0.1)" }}>
+              <div className="text-[14px] font-bold tabular-nums" style={{ color: "#00ff88" }}>{value}</div>
+              <div className="text-[8px] uppercase tracking-wider text-neutral-600">{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Train / Reload buttons */}
+      {status.enabled && !status.available && (
+        <div className="space-y-2 pt-1">
+          {training?.running ? (
+            <>
+              {/* Progress bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[8px] text-neutral-600">
+                  <span>Training… {pct}%</span>
+                  {training.last_reward !== null && (
+                    <span>reward {training.last_reward.toFixed(3)}</span>
+                  )}
+                </div>
+                <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${pct}%`, background: "linear-gradient(90deg,#f59e0b,#00ff88)" }}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={cancel}
+                className="w-full py-1.5 text-[9px] uppercase tracking-wider text-red-400/70 hover:text-red-400 transition-colors"
+                style={{ border: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : training?.done ? (
+            <button
+              onClick={reload}
+              disabled={reloading}
+              className="w-full py-1.5 text-[9px] uppercase tracking-wider transition-all disabled:opacity-50"
+              style={{ color: "#00ff88", border: "1px solid rgba(0,255,136,0.3)", background: "rgba(0,255,136,0.06)" }}
+            >
+              {reloading ? "Reloading…" : "[ Reload Agent ]"}
+            </button>
+          ) : (
+            <button
+              onClick={startTraining}
+              className="w-full py-1.5 text-[9px] uppercase tracking-wider transition-all hover:bg-amber-400/10"
+              style={{ color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}
+            >
+              [ Train RL Agent ]
+            </button>
+          )}
+
+          {/* Log toggle */}
+          {training && training.log.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowLog((v) => !v)}
+                className="text-[8px] uppercase tracking-wider text-neutral-700 hover:text-neutral-500 transition-colors"
+              >
+                {showLog ? "▼ hide log" : "▶ show log"}
+              </button>
+              {showLog && (
+                <div
+                  ref={logRef}
+                  className="mt-1.5 max-h-28 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {training.log.map((line, i) => (
+                    <div key={i} className="text-[8px] text-neutral-700 leading-relaxed font-mono">
+                      {line}
+                    </div>
+                  ))}
+                  {training.error && (
+                    <div className="text-[8px] text-red-400">{training.error}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reload button when available (re-train) */}
+      {status.available && (
+        <button
+          onClick={startTraining}
+          disabled={training?.running}
+          className="w-full py-1.5 text-[8px] uppercase tracking-wider text-neutral-700 hover:text-neutral-500 transition-colors disabled:opacity-30"
+          style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          Re-train agent
+        </button>
+      )}
+
+      {/* Hybrid weights */}
+      <div className="pt-1 space-y-1.5">
+        <div className="text-[8px] uppercase tracking-widest text-neutral-700 mb-1">Hybrid weights</div>
+        {SCORE_META.map(({ label, desc, color }) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+            <span className="text-[9px] text-neutral-500 w-14 uppercase tracking-wider">{label}</span>
+            <span className="text-[9px] text-neutral-700 leading-tight">{desc}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Score bar ─────────────────────────────────────────────────────────────
+function ScoreBar({ label, value, color, desc }: { label: string; value: number; color: string; desc: string }) {
+  const pct = Math.max(0, Math.min(100, value * 100))
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      className="group relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="flex items-center gap-2 text-[9px]">
+        <span className="text-neutral-600 w-16 uppercase tracking-wider shrink-0">{label}</span>
+        <div className="flex-1 h-0.5 bg-white/5 overflow-hidden rounded-full">
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${pct}%`, background: color, boxShadow: `0 0 4px ${color}80` }}
+          />
+        </div>
+        <span className="text-neutral-500 w-8 text-right font-mono tabular-nums">{value.toFixed(2)}</span>
+      </div>
+      {hovered && (
+        <div
+          className="absolute left-16 -top-6 text-[9px] text-neutral-400 px-2 py-1 rounded-sm z-20 whitespace-nowrap"
+          style={{ background: "rgba(0,5,16,0.95)", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          {desc}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Star rating ───────────────────────────────────────────────────────────
+function StarRating({
+  entryId,
+  initial,
+}: {
+  entryId: string | null
+  initial?: number | null
+}) {
+  const [rating, setRating] = useState<number | null>(initial ?? null)
+  const [hover, setHover] = useState<number | null>(null)
+  const [saved, setSaved] = useState(!!initial)
+
+  if (!entryId) return null
+
+  const submit = async (r: number) => {
+    setRating(r)
+    setSaved(false)
+    try {
+      await api.rateRetrieval(entryId, r)
+      setSaved(true)
+    } catch {}
+  }
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((s) => (
+        <button
+          key={s}
+          onClick={() => submit(s)}
+          onMouseEnter={() => setHover(s)}
+          onMouseLeave={() => setHover(null)}
+          className="text-[13px] transition-all"
+          style={{
+            color:
+              (hover !== null ? s <= hover : s <= (rating ?? 0))
+                ? "#f59e0b"
+                : "rgba(255,255,255,0.12)",
+            textShadow:
+              (hover !== null ? s <= hover : s <= (rating ?? 0))
+                ? "0 0 6px rgba(245,158,11,0.5)"
+                : "none",
+          }}
+        >
+          ★
+        </button>
+      ))}
+      {saved && rating && (
+        <span className="ml-1.5 text-[8px] text-amber-600 uppercase tracking-wider">saved</span>
+      )}
+    </div>
+  )
+}
+
+// ─── Result card ───────────────────────────────────────────────────────────
+function ResultCard({
+  r,
+  idx,
+  rejected = false,
+  compact = false,
+  entryId: _entryId,
+}: {
+  r: RetrievedResult
+  idx: number
+  rejected?: boolean
+  compact?: boolean
+  entryId?: string | null
+}) {
+  const color = tierColor(r.tier)
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div
+      className="relative rounded-sm overflow-hidden transition-all duration-200 group"
       style={{
         background: "rgba(0,5,16,0.7)",
         border: "1px solid rgba(255,255,255,0.05)",
-        borderLeft: `2px solid ${borderColor}`,
+        borderLeft: `2px solid ${rejected ? "rgba(239,68,68,0.4)" : color}`,
+        opacity: rejected ? 0.5 : 1,
       }}
       onMouseEnter={(e) => {
         if (rejected || compact) return
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${color}18`
-        ;(e.currentTarget as HTMLElement).style.borderColor = `${color}30`
-        ;(e.currentTarget as HTMLElement).style.borderLeftColor = color
+        const el = e.currentTarget as HTMLElement
+        el.style.boxShadow = `0 0 24px ${color}18`
+        el.style.borderColor = `${color}22`
       }}
       onMouseLeave={(e) => {
         if (rejected || compact) return
-        (e.currentTarget as HTMLElement).style.boxShadow = "none"
-        ;(e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.05)"
-        ;(e.currentTarget as HTMLElement).style.borderLeftColor = color
+        const el = e.currentTarget as HTMLElement
+        el.style.boxShadow = "none"
+        el.style.borderColor = "rgba(255,255,255,0.05)"
       }}
     >
       {rejected && (
-        <div className="absolute top-3 right-3">
-          <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm"
-            style={{ color: "#ff4d6d", background: "rgba(255,77,109,0.15)", border: "1px solid rgba(255,77,109,0.25)" }}>
+        <div className="absolute top-2 right-2">
+          <span
+            className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-sm"
+            style={{ color: "#f87171", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)" }}
+          >
             REJECTED
           </span>
         </div>
       )}
 
-      <div className={`flex gap-4 ${compact ? "p-2" : "p-4"}`}>
-        <div className={`font-bold text-neutral-800 shrink-0 tabular-nums leading-none mt-1 ${compact ? "text-[14px]" : "text-[22px]"}`}>
+      <div className={`flex gap-3 ${compact ? "p-2.5" : "p-4"}`}>
+        {/* Index */}
+        <div
+          className={`font-bold tabular-nums shrink-0 leading-none mt-0.5 ${compact ? "text-[13px]" : "text-[20px]"}`}
+          style={{ color: "rgba(255,255,255,0.08)" }}
+        >
           {String(idx + 1).padStart(2, "0")}
         </div>
 
-        <div className="flex-1 min-w-0 pr-16">
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm"
-              style={{ color, background: `${color}15` }}>
-              {r.domain || "—"}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Meta row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm"
+              style={{ color, background: `${color}15` }}
+            >
+              T{r.tier} {r.domain || "—"}
+            </span>
+            {r.subdomain && (
+              <span className="text-[8px] text-neutral-600 uppercase tracking-wider">
+                {r.subdomain}
+              </span>
+            )}
+            <span
+              className="ml-auto text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-sm shrink-0"
+              style={{ color, background: `${color}12`, border: `1px solid ${color}20` }}
+            >
+              {r.score.toFixed(3)}
             </span>
           </div>
 
-          <p className={`text-neutral-300 leading-relaxed mb-3 ${compact ? "text-[10px] line-clamp-2" : "text-[11px] line-clamp-3"}`}>{r.text}</p>
+          {/* Text */}
+          <p
+            className={`text-neutral-300 leading-relaxed ${compact ? "text-[10px] line-clamp-2" : "text-[11px]"} ${!compact && !expanded && "line-clamp-3"}`}
+          >
+            {r.text}
+          </p>
 
+          {!compact && r.text.length > 180 && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-[9px] text-neutral-600 hover:text-neutral-400 uppercase tracking-wider transition-colors"
+            >
+              {expanded ? "show less ▲" : "show more ▼"}
+            </button>
+          )}
+
+          {/* Score bars */}
           {!compact && (
-            <div className="space-y-1.5">
-              <ScoreBar label="COSINE" value={r.cosine_contribution} color="#3b82f6" />
-              <ScoreBar label="RECENCY" value={r.recency_contribution} color="#009b94" />
-              <ScoreBar label="CATEGORY" value={r.category_contribution} color="#a855f7" />
+            <div className="space-y-1.5 pt-1">
+              {SCORE_META.map(({ key, label, desc, color: c }) => (
+                <ScoreBar
+                  key={key}
+                  label={label}
+                  value={(r as any)[key] as number}
+                  color={c}
+                  desc={desc}
+                />
+              ))}
             </div>
           )}
-        </div>
-
-        <div className="shrink-0">
-          <span className="text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-sm"
-            style={{ color, background: `${color}18`, border: `1px solid ${color}25` }}>
-            {r.score.toFixed(3)}
-          </span>
         </div>
       </div>
     </div>
   )
 }
 
-function CompareView({ result, loading: compareLoading }: { result: CompareResult; loading: boolean }) {
-  const hybridIds = new Set(result.hybrid.map(r => r.node_id))
-  const rlIds = new Set(result.rl.map(r => r.node_id))
+// ─── Compare view ──────────────────────────────────────────────────────────
+interface CompareResult {
+  query: string
+  query_domain: string
+  rl_available: boolean
+  hybrid: RetrievedResult[]
+  rl: RetrievedResult[]
+  overlap_count: number
+}
 
-  const getStatus = (nodeId: string): "overlap" | "hybrid" | "rl" => {
-    const inHybrid = hybridIds.has(nodeId)
-    const inRl = rlIds.has(nodeId)
-    if (inHybrid && inRl) return "overlap"
-    if (inHybrid) return "hybrid"
-    return "rl"
+function CompareView({ result }: { result: CompareResult }) {
+  const hybridIds = new Set(result.hybrid.map((r) => r.node_id))
+  const rlIds = new Set(result.rl.map((r) => r.node_id))
+
+  const statusOf = (id: string) => {
+    const inH = hybridIds.has(id)
+    const inR = rlIds.has(id)
+    if (inH && inR) return "overlap"
+    return inH ? "hybrid-only" : "rl-only"
   }
+
+  const overlapPct = Math.round((result.overlap_count / Math.max(result.hybrid.length, 1)) * 100)
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider" style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)", paddingBottom: "8px" }}>
-        <span className="text-amber-400">●</span>
-        <span className="text-neutral-500">DOMAIN: <span className="text-amber-400">{result.query_domain || "—"}</span></span>
-        <span className="text-neutral-500 ml-4">OVERLAP: <span className="text-emerald-400">{result.overlap_count}/5</span></span>
+      {/* Stats bar */}
+      <div
+        className="flex items-center gap-6 px-4 py-3 rounded-sm text-[10px]"
+        style={{ background: "rgba(0,5,16,0.5)", border: "1px solid rgba(255,255,255,0.05)" }}
+      >
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-amber-400" style={{ boxShadow: "0 0 4px rgba(251,191,36,0.5)" }} />
+          <span className="text-neutral-500 uppercase tracking-wider">Domain: <span className="text-amber-400">{result.query_domain || "—"}</span></span>
+        </div>
+        <div className="h-3 w-px bg-white/10" />
+        <div className="flex items-center gap-1.5">
+          <span className="text-neutral-500 uppercase tracking-wider">
+            Agreement: <span style={{ color: overlapPct >= 60 ? "#00ff88" : "#f59e0b" }}>{result.overlap_count}/{result.hybrid.length} ({overlapPct}%)</span>
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-3 text-[9px]">
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 4px rgba(0,255,136,0.5)" }} />
+            <span className="text-neutral-600">both agreed</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="text-neutral-600">hybrid only</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-violet-400" />
+            <span className="text-neutral-600">RL only</span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
+        {/* Hybrid column */}
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className="h-2 w-2 rounded-full bg-amber-400" style={{ boxShadow: "0 0 4px rgba(251, 191, 36, 0.6)" }} />
-            <span className="text-[10px] uppercase tracking-wider text-amber-400">HYBRID SCORING</span>
+            <div className="w-2 h-2 rounded-full bg-amber-400" style={{ boxShadow: "0 0 4px rgba(251,191,36,0.5)" }} />
+            <span className="text-[10px] uppercase tracking-wider text-amber-400">Hybrid Scoring</span>
+            <span className="text-[9px] text-neutral-700 ml-auto">cosine · recency · domain</span>
           </div>
           <div className="space-y-2">
             {result.hybrid.map((r, idx) => {
-              const status = getStatus(r.node_id)
+              const status = statusOf(r.node_id)
               return (
                 <div
                   key={r.node_id}
                   className="relative"
                   style={{
-                    boxShadow: status === "overlap" ? "0 0 12px rgba(0, 255, 136, 0.2)" : status === "hybrid" ? "0 0 8px rgba(251, 191, 36, 0.15)" : "none",
                     borderRadius: "4px",
+                    boxShadow: status === "overlap"
+                      ? "0 0 10px rgba(0,255,136,0.15)"
+                      : "0 0 6px rgba(251,191,36,0.1)",
+                    outline: status === "overlap" ? "1px solid rgba(0,255,136,0.15)" : "none",
                   }}
                 >
                   {status === "overlap" && (
-                    <div className="absolute -left-2 top-1/2 -translate-y-1/2 text-emerald-400 text-[10px]">✦</div>
+                    <span
+                      className="absolute -left-2 top-1/2 -translate-y-1/2 text-[9px]"
+                      style={{ color: "#00ff88" }}
+                    >
+                      ✦
+                    </span>
                   )}
                   <ResultCard r={r} idx={idx} compact />
                 </div>
@@ -157,29 +663,63 @@ function CompareView({ result, loading: compareLoading }: { result: CompareResul
           </div>
         </div>
 
+        {/* RL column */}
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className={`h-2 w-2 rounded-full ${result.rl_available ? "bg-emerald-400" : "bg-neutral-600"}`}
-              style={{ boxShadow: result.rl_available ? "0 0 4px rgba(0, 255, 136, 0.6)" : "none" }} />
+            <div
+              className={`w-2 h-2 rounded-full ${result.rl_available ? "bg-emerald-400" : "bg-neutral-700"}`}
+              style={{ boxShadow: result.rl_available ? "0 0 4px rgba(0,255,136,0.5)" : "none" }}
+            />
             <span className={`text-[10px] uppercase tracking-wider ${result.rl_available ? "text-emerald-400" : "text-neutral-600"}`}>
-              RL AGENT {result.rl_available ? "" : "(NOT AVAILABLE)"}
+              RL Agent {!result.rl_available && "(not available)"}
             </span>
+            {result.rl_available && (
+              <span className="text-[9px] text-neutral-700 ml-auto">learned policy</span>
+            )}
           </div>
+
           {result.rl_available ? (
             <div className="space-y-2">
               {result.rl.map((r, idx) => {
-                const status = getStatus(r.node_id)
+                const status = statusOf(r.node_id)
+                const hybridRank = result.hybrid.findIndex((h) => h.node_id === r.node_id)
                 return (
                   <div
                     key={r.node_id}
                     className="relative"
                     style={{
-                      boxShadow: status === "overlap" ? "0 0 12px rgba(0, 255, 136, 0.2)" : status === "rl" ? "0 0 8px rgba(0, 255, 136, 0.15)" : "none",
                       borderRadius: "4px",
+                      boxShadow: status === "overlap"
+                        ? "0 0 10px rgba(0,255,136,0.15)"
+                        : "0 0 6px rgba(139,92,246,0.12)",
+                      outline: status === "overlap" ? "1px solid rgba(0,255,136,0.15)" : "none",
                     }}
                   >
                     {status === "overlap" && (
-                      <div className="absolute -left-2 top-1/2 -translate-y-1/2 text-emerald-400 text-[10px]">✦</div>
+                      <span
+                        className="absolute -left-2 top-1/2 -translate-y-1/2 text-[9px]"
+                        style={{ color: "#00ff88" }}
+                      >
+                        ✦
+                      </span>
+                    )}
+                    {status === "rl-only" && (
+                      <span
+                        className="absolute -left-2 top-1/2 -translate-y-1/2 text-[9px]"
+                        style={{ color: "#a78bfa" }}
+                        title="RL picked this but hybrid didn't"
+                      >
+                        ◆
+                      </span>
+                    )}
+                    {hybridRank >= 0 && hybridRank !== idx && (
+                      <div
+                        className="absolute top-1.5 right-2 text-[8px] tabular-nums"
+                        style={{ color: hybridRank < idx ? "#f87171" : "#4ade80" }}
+                        title={`Hybrid rank: #${hybridRank + 1}`}
+                      >
+                        {hybridRank < idx ? `▼ was #${hybridRank + 1}` : `▲ was #${hybridRank + 1}`}
+                      </div>
                     )}
                     <ResultCard r={r} idx={idx} compact />
                   </div>
@@ -187,8 +727,12 @@ function CompareView({ result, loading: compareLoading }: { result: CompareResul
               })}
             </div>
           ) : (
-            <div className="text-[10px] text-neutral-700 uppercase tracking-wider py-4 text-center">
-              RL AGENT DISABLED — SHOWING SAME RESULTS
+            <div
+              className="py-12 text-center rounded-sm"
+              style={{ border: "1px dashed rgba(255,255,255,0.06)" }}
+            >
+              <div className="text-[9px] text-neutral-700 uppercase tracking-wider">RL not available</div>
+              <div className="text-[9px] text-neutral-800 mt-1">Train the agent in Settings first</div>
             </div>
           )}
         </div>
@@ -197,287 +741,426 @@ function CompareView({ result, loading: compareLoading }: { result: CompareResul
   )
 }
 
+// ─── Empty state ───────────────────────────────────────────────────────────
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 select-none">
+      <div className="relative mb-6">
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{ border: "1px solid rgba(0,255,136,0.12)", boxShadow: "0 0 40px rgba(0,255,136,0.06)" }}
+        >
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center"
+            style={{ border: "1px solid rgba(0,255,136,0.18)", animation: "pulse 3s ease-in-out infinite" }}
+          >
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ background: "rgba(0,255,136,0.5)", boxShadow: "0 0 8px rgba(0,255,136,0.6)" }}
+            />
+          </div>
+        </div>
+        {[26, 40, 54].map((r, i) => (
+          <div
+            key={i}
+            className="absolute top-1/2 left-1/2 rounded-full"
+            style={{
+              width: r * 2,
+              height: r * 2,
+              marginLeft: -r,
+              marginTop: -r,
+              border: "1px solid rgba(0,255,136,0.06)",
+              animation: `spin ${7 + i * 2}s linear infinite`,
+              animationDirection: i % 2 ? "reverse" : "normal",
+            }}
+          />
+        ))}
+      </div>
+      <div className="text-[9px] uppercase tracking-[0.3em] text-neutral-700 mb-1">// STANDBY</div>
+      <div className="text-[11px] text-neutral-600 uppercase tracking-widest" style={{ animation: "pulse 2.5s ease-in-out infinite" }}>
+        Awaiting query
+      </div>
+    </div>
+  )
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────
 export function RetrievalPage() {
-  const [query, setQuery] = useState("")
-  const [result, setResult] = useState<RetrieveResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
-  const [includeRejected, setIncludeRejected] = useState(false)
-  const [showRejected, setShowRejected] = useState(false)
-  const [mode, setMode] = useState<"single" | "compare">("single")
-  const [compareResult, setCompareResult] = useState<CompareResult | null>(null)
+  const [query, setQuery]                   = useState("")
+  const [result, setResult]                 = useState<RetrieveResponse | null>(null)
+  const [loading, setLoading]               = useState(false)
+  const [rlStatus, setRlStatus]              = useState<RLStatus | null>(null)
+  const [mode, setMode]                     = useState<"single" | "compare">("single")
+  const [compareResult, setCompareResult]   = useState<CompareResult | null>(null)
   const [compareLoading, setCompareLoading] = useState(false)
+  const [showRejected, setShowRejected]     = useState(false)
+  const [includeRejected, setIncludeRejected] = useState(false)
+  const [queryHistory, setQueryHistory]     = useState<string[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const isLoading = loading || compareLoading
+
+  const refreshRlStatus = useCallback(() => {
+    api.rlStatus().then(setRlStatus).catch(() => {})
+  }, [])
 
   useEffect(() => {
-    api.rlStatus()
-      .then(setRlStatus)
-      .catch(() => {})
+    refreshRlStatus()
+    inputRef.current?.focus()
   }, [])
 
   const run = async () => {
-    if (!query.trim()) return
+    if (!query.trim() || isLoading) return
     setLoading(true)
+    setResult(null)
+    setCompareResult(null)
     try {
       const res = await api.retrieve(query.trim(), 10, includeRejected)
       setResult(res)
+      setQueryHistory((h) => [query.trim(), ...h.filter((q) => q !== query.trim())].slice(0, 8))
     } finally {
       setLoading(false)
     }
   }
 
   const runCompare = async () => {
-    if (!query.trim()) return
+    if (!query.trim() || isLoading) return
     setCompareLoading(true)
+    setResult(null)
+    setCompareResult(null)
     try {
       const res = await api.compareRetrieve(query.trim(), 5)
       setCompareResult(res)
+      setQueryHistory((h) => [query.trim(), ...h.filter((q) => q !== query.trim())].slice(0, 8))
     } finally {
       setCompareLoading(false)
     }
   }
 
+  const submit = () => (mode === "compare" ? runCompare() : run())
+
   return (
-    <div className="relative h-full min-h-0 bg-[#020d0d] font-mono overflow-y-auto">
+    <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
       <ScanlineOverlay />
 
-      {(loading || compareLoading) && (
-        <MatrixRain
-          className="absolute inset-0 h-full w-full pointer-events-none z-[1]"
-          opacity={0.08}
-          fontSize={12}
+      {/* ambient glow */}
+      <div
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 0%, rgba(0,255,136,0.06) 0%, transparent 55%), radial-gradient(ellipse at 50% 100%, rgba(0,229,255,0.04) 0%, transparent 55%)",
+        }}
+      />
+
+      {/* corner brackets */}
+      {[
+        "top-3 left-3 border-t-2 border-l-2",
+        "top-3 right-3 border-t-2 border-r-2",
+        "bottom-3 left-3 border-b-2 border-l-2",
+        "bottom-3 right-3 border-b-2 border-r-2",
+      ].map((cls) => (
+        <div
+          key={cls}
+          className={`pointer-events-none absolute h-5 w-5 border-emerald-400/30 ${cls}`}
+          style={{ filter: "drop-shadow(0 0 4px rgba(0,255,136,0.4))" }}
         />
-      )}
+      ))}
 
-      <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(0, 255, 136,0.08), transparent 50%), radial-gradient(ellipse at 50% 100%, rgba(0, 229, 255,0.06), transparent 50%)" }} />
-
-      <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
-      <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
-      <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
-      <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-emerald-400/40"
-        style={{ filter: "drop-shadow(0 0 4px rgba(0, 255, 136,0.5))" }} />
-
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-8">
-
-        <div className="mb-8">
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
+        {/* ── Header ── */}
+        <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">// SYS.RETRIEVAL</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Memory Retrieval</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
-            style={{ textShadow: "0 0 20px rgba(0, 255, 136,0.4)" }}>
-            Memory Query Engine
-          </h1>
-          <div className="mt-2 flex items-center gap-4">
-            <p className="text-[11px] text-neutral-500 uppercase tracking-wider">
-              Semantic search across the cognitive memory graph
-            </p>
+          <div className="flex items-end gap-4">
+            <h1
+              className="text-xl font-bold tracking-wide text-emerald-300"
+              style={{ textShadow: "0 0 20px rgba(0,255,136,0.4)" }}
+            >
+              Query Engine
+            </h1>
             {rlStatus && (
-              <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-sm ${
-                rlStatus.available
-                  ? "text-emerald-400 bg-emerald-400/10 border border-emerald-400/20"
-                  : rlStatus.enabled
-                  ? "text-amber-400 bg-amber-400/10 border border-amber-400/20"
-                  : "text-neutral-500 bg-neutral-500/10 border border-neutral-500/20"
-              }`}>
-                {rlStatus.available ? "RL ACTIVE" : rlStatus.enabled ? "RL LOADING" : "HYBRID MODE"}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="relative mb-6">
-          <div className="absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300"
-            style={{
-              background: loading || compareLoading
-                ? "linear-gradient(180deg, transparent, #22d3ee, #a855f7, transparent)"
-                : "linear-gradient(180deg, transparent, rgba(0, 255, 136,0.5), transparent)",
-              boxShadow: loading || compareLoading ? "0 0 10px rgba(0, 255, 136,0.6)" : "none",
-              animation: loading || compareLoading ? "pulse 1s ease-in-out infinite" : "none",
-            }} />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (mode === "compare") runCompare()
-                else run()
-              }
-            }}
-            placeholder="QUERY THE MEMORY GRAPH..."
-            disabled={loading || compareLoading}
-            className="w-full bg-transparent py-4 pl-4 pr-52 text-base text-neutral-100 placeholder:text-neutral-700 focus:outline-none transition-all"
-            style={{ borderBottom: "1px solid rgba(0, 255, 136,0.25)", caretColor: "#22d3ee" }}
-          />
-          <div className="absolute right-36 top-1/2 -translate-y-1/2 flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setMode("single")}
-                className={`px-3 py-1.5 text-[9px] uppercase tracking-wider rounded-sm transition-all ${
-                  mode === "single" ? "text-emerald-300 bg-emerald-300/10 border border-emerald-300/30" : "text-neutral-600 hover:text-neutral-400 border border-transparent"
-                }`}
+              <span
+                className="mb-0.5 text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-sm"
+                style={{
+                  color: rlStatus.available ? "#00ff88" : rlStatus.enabled ? "#f59e0b" : "#525252",
+                  background: rlStatus.available
+                    ? "rgba(0,255,136,0.08)"
+                    : rlStatus.enabled
+                    ? "rgba(245,158,11,0.08)"
+                    : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${rlStatus.available ? "rgba(0,255,136,0.2)" : rlStatus.enabled ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.08)"}`,
+                }}
               >
-                SINGLE
-              </button>
-              {rlStatus?.available && (
-                <button
-                  onClick={() => setMode("compare")}
-                  className={`px-3 py-1.5 text-[9px] uppercase tracking-wider rounded-sm transition-all ${
-                    mode === "compare" ? "text-emerald-300 bg-emerald-300/10 border border-emerald-300/30" : "text-neutral-600 hover:text-neutral-400 border border-transparent"
-                  }`}
-                >
-                  COMPARE
-                </button>
-              )}
-            </div>
-            {mode === "single" && rlStatus?.available && (
-              <label className="flex items-center gap-1.5 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={includeRejected}
-                  onChange={(e) => setIncludeRejected(e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={`w-8 h-4 rounded-full transition-colors ${includeRejected ? "bg-emerald-500/30" : "bg-neutral-800"}`}
-                  style={{ border: "1px solid rgba(0, 255, 136,0.3)" }}>
-                  <div className={`w-3 h-3 rounded-full mt-0.25 transition-transform ${includeRejected ? "translate-x-4 bg-emerald-400" : "translate-x-0.5 bg-neutral-600"}`}
-                    style={{ boxShadow: includeRejected ? "0 0 4px rgba(0, 255, 136,0.6)" : "none" }} />
-                </div>
-                <span className="text-[9px] uppercase tracking-wider text-neutral-600 group-hover:text-neutral-400 transition-colors">
-                  RL
-                </span>
-              </label>
+                {rlStatus.available ? "RL Active" : rlStatus.enabled ? "RL Loading" : "Hybrid Mode"}
+              </span>
             )}
           </div>
-          <button
-            onClick={mode === "compare" ? runCompare : run}
-            disabled={loading || compareLoading || !query.trim()}
-            className="absolute right-0 top-1/2 -translate-y-1/2 px-4 py-2 text-[10px] uppercase tracking-widest border transition-all duration-150 disabled:opacity-30"
-            style={{
-              borderColor: "rgba(0, 255, 136,0.35)",
-              color: "rgba(0, 255, 136,0.8)",
-              background: loading || compareLoading ? "rgba(0, 255, 136,0.05)" : "transparent",
-            }}
-          >
-            {loading || compareLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="inline-flex gap-1">
-                  {[0, 150, 300].map((delay) => (
-                    <span key={delay} className="w-1 h-1 bg-emerald-400 rounded-full animate-bounce"
-                      style={{ animationDelay: `${delay}ms` }} />
-                  ))}
-                </span>
-                SCANNING
-              </span>
-            ) : (
-              "[ SCAN ]"
-            )}
-          </button>
         </div>
 
-        {mode === "single" && result && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-4 py-2 text-[10px]"
-              style={{ borderBottom: "1px solid rgba(0, 255, 136,0.1)" }}>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-emerald-400"
-                  style={{ boxShadow: "0 0 4px rgba(0, 255, 136,0.8)" }} />
-                <span className="text-neutral-500 uppercase tracking-wider">
-                  DOMAIN: <span className="text-emerald-400">{result.query_domain || "—"}</span>
-                </span>
-              </div>
-              <div className="h-3 w-px bg-white/10" />
-              <span className="text-neutral-500 uppercase tracking-wider">
-                RESULTS: <span className="text-neutral-300">{result.results.length}</span>
-              </span>
-              {result.rejected && result.rejected.length > 0 && (
-                <>
-                  <div className="h-3 w-px bg-white/10" />
-                  <span className="text-neutral-500 uppercase tracking-wider">
-                    REJECTED: <span className="text-neutral-300">{result.rejected.length}</span>
-                  </span>
-                </>
-              )}
-              <div className="ml-auto h-0.5 flex-1 max-w-24"
-                style={{ background: "linear-gradient(to right, rgba(0, 255, 136,0.4), transparent)" }} />
-            </div>
+        {/* ── Query bar ── */}
+        <div
+          className="relative mb-6 rounded-sm"
+          style={{
+            background: "rgba(0,5,16,0.5)",
+            border: `1px solid ${isLoading ? "rgba(0,255,136,0.25)" : "rgba(255,255,255,0.07)"}`,
+            boxShadow: isLoading ? "0 0 20px rgba(0,255,136,0.06)" : "none",
+            transition: "box-shadow 0.3s ease, border-color 0.3s ease",
+          }}
+        >
+          {/* animated left bar */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-0.5 rounded-l-sm transition-all duration-300"
+            style={{
+              background: isLoading
+                ? "linear-gradient(180deg, transparent, #22d3ee, #a855f7, transparent)"
+                : "linear-gradient(180deg, transparent, rgba(0,255,136,0.4), transparent)",
+              boxShadow: isLoading ? "0 0 8px rgba(0,229,255,0.5)" : "none",
+              animation: isLoading ? "scanPulse 1.2s ease-in-out infinite" : "none",
+            }}
+          />
 
-            <div className="space-y-3">
-              {result.results.map((r, idx) => (
-                <ResultCard key={r.node_id} r={r} idx={idx} />
+          <div className="flex items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+              placeholder="QUERY THE MEMORY GRAPH..."
+              disabled={isLoading}
+              className="flex-1 bg-transparent py-4 pl-4 pr-4 text-base text-neutral-100 placeholder:text-neutral-700 focus:outline-none disabled:opacity-60"
+              style={{ caretColor: "#22d3ee" }}
+            />
+
+            {/* mode toggle */}
+            <div className="flex items-center gap-1 px-3 border-l border-white/5">
+              {(["single", "compare"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  disabled={m === "compare" && !rlStatus?.available}
+                  className="px-3 py-1.5 text-[9px] uppercase tracking-wider rounded-sm transition-all disabled:opacity-25"
+                  style={{
+                    color: mode === m ? "#6ee7b7" : "#404040",
+                    background: mode === m ? "rgba(0,255,136,0.08)" : "transparent",
+                    border: mode === m ? "1px solid rgba(0,255,136,0.2)" : "1px solid transparent",
+                  }}
+                >
+                  {m}
+                </button>
               ))}
             </div>
 
-            {result.rejected && result.rejected.length > 0 && (
-              <div className="mt-6">
-                <button
-                  onClick={() => setShowRejected(!showRejected)}
-                  className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-neutral-500 hover:text-neutral-300 transition-colors mb-3"
-                >
-                  <span className={`transition-transform ${showRejected ? "rotate-90" : ""}`}>
-                    ▶
-                  </span>
-                  RL SELECTION — REJECTED CANDIDATES ({result.rejected.length})
-                </button>
+            {/* rejected toggle (single + RL active) */}
+            {mode === "single" && rlStatus?.available && (
+              <div className="px-3 border-l border-white/5">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeRejected}
+                    onChange={(e) => setIncludeRejected(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div
+                    className="w-8 h-4 rounded-full transition-colors relative"
+                    style={{
+                      background: includeRejected ? "rgba(0,255,136,0.25)" : "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(0,255,136,0.25)",
+                    }}
+                  >
+                    <div
+                      className="absolute top-0.5 w-3 h-3 rounded-full transition-transform"
+                      style={{
+                        background: includeRejected ? "#00ff88" : "#404040",
+                        left: includeRejected ? "calc(100% - 14px)" : "2px",
+                        boxShadow: includeRejected ? "0 0 4px rgba(0,255,136,0.6)" : "none",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-600">Show rejected</span>
+                </label>
+              </div>
+            )}
 
-                {showRejected && (
-                  <div className="space-y-3">
-                    {result.rejected.map((r, idx) => (
-                      <ResultCard key={r.node_id} r={r} idx={idx} rejected />
+            {/* scan button */}
+            <button
+              onClick={submit}
+              disabled={isLoading || !query.trim()}
+              className="px-5 py-4 text-[10px] uppercase tracking-widest border-l transition-all disabled:opacity-30"
+              style={{
+                borderColor: "rgba(0,255,136,0.2)",
+                color: "#00ff88",
+                background: isLoading ? "rgba(0,255,136,0.04)" : "transparent",
+              }}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-flex gap-0.5">
+                    {[0, 150, 300].map((d) => (
+                      <span
+                        key={d}
+                        className="w-1 h-1 bg-emerald-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${d}ms` }}
+                      />
                     ))}
+                  </span>
+                  Scanning
+                </span>
+              ) : (
+                "[ SCAN ]"
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Query history pills ── */}
+        {queryHistory.length > 0 && !isLoading && (
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            {queryHistory.map((q) => (
+              <button
+                key={q}
+                onClick={() => { setQuery(q); setTimeout(submit, 0) }}
+                className="text-[9px] px-2.5 py-1 rounded-sm text-neutral-600 hover:text-neutral-300 transition-colors"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+              >
+                {q.length > 40 ? q.slice(0, 40) + "…" : q}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Body: sidebar + results ── */}
+        <div className="flex gap-5">
+          {/* Left sidebar */}
+          <div className="w-56 shrink-0 space-y-4">
+            {/* Pipeline steps */}
+            <div
+              className="rounded-sm p-4"
+              style={{ background: "rgba(0,5,16,0.7)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <div className="text-[8px] uppercase tracking-widest text-neutral-700 mb-3">
+                // Retrieval Pipeline
+              </div>
+              <PipelineSteps
+                active={isLoading}
+                rlAvailable={rlStatus?.available ?? false}
+              />
+            </div>
+
+            {/* RL explanation */}
+            <RLPanel status={rlStatus} onStatusChange={refreshRlStatus} />
+          </div>
+
+          {/* Results area */}
+          <div className="flex-1 min-w-0">
+
+            {/* Single mode results */}
+            {mode === "single" && result && (
+              <div className="space-y-4">
+                {/* Results meta bar */}
+                <div
+                  className="flex items-center gap-4 px-4 py-2.5 rounded-sm text-[10px]"
+                  style={{ background: "rgba(0,5,16,0.5)", border: "1px solid rgba(255,255,255,0.05)" }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                      style={{ boxShadow: "0 0 4px rgba(0,255,136,0.8)" }} />
+                    <span className="text-neutral-500 uppercase tracking-wider">
+                      Domain: <span className="text-emerald-400">{result.query_domain || "—"}</span>
+                    </span>
+                  </div>
+                  <div className="h-3 w-px bg-white/10" />
+                  <span className="text-neutral-500 uppercase tracking-wider">
+                    Results: <span className="text-neutral-300">{result.results.length}</span>
+                  </span>
+                  {result.rejected && result.rejected.length > 0 && (
+                    <>
+                      <div className="h-3 w-px bg-white/10" />
+                      <span className="text-neutral-500 uppercase tracking-wider">
+                        Rejected by RL: <span className="text-red-400">{result.rejected.length}</span>
+                      </span>
+                    </>
+                  )}
+                  {result.entry_id && (
+                    <div className="ml-auto">
+                      <StarRating entryId={result.entry_id} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Result cards */}
+                <div className="space-y-3">
+                  {result.results.map((r, idx) => (
+                    <ResultCard
+                      key={r.node_id}
+                      r={r}
+                      idx={idx}
+                      entryId={result.entry_id}
+                    />
+                  ))}
+                </div>
+
+                {/* Rejected section */}
+                {result.rejected && result.rejected.length > 0 && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setShowRejected((v) => !v)}
+                      className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-neutral-600 hover:text-neutral-400 transition-colors mb-3"
+                    >
+                      <span style={{ transform: showRejected ? "rotate(90deg)" : "none", display: "inline-block" }}>▶</span>
+                      RL Rejected Candidates ({result.rejected.length})
+                      <span className="text-[8px] text-neutral-700 normal-case tracking-normal">
+                        — the RL agent considered these but chose not to return them
+                      </span>
+                    </button>
+                    {showRejected && (
+                      <div className="space-y-2">
+                        {result.rejected.map((r, idx) => (
+                          <ResultCard key={r.node_id} r={r} idx={idx} rejected />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {mode === "compare" && compareResult && (
-          <CompareView result={compareResult} loading={compareLoading} />
-        )}
+            {/* Compare mode results */}
+            {mode === "compare" && compareResult && (
+              <CompareView result={compareResult} />
+            )}
 
-        {!result && !compareResult && !loading && !compareLoading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="mb-6 relative">
-              <div
-                className="w-20 h-20 rounded-full border border-emerald-400/15 flex items-center justify-center"
-                style={{ boxShadow: "0 0 40px rgba(0, 255, 136,0.08)" }}
-              >
-                <div className="w-12 h-12 rounded-full border border-emerald-400/20 flex items-center justify-center"
-                  style={{ animation: "pulse 3s ease-in-out infinite" }}>
-                  <div className="w-2 h-2 rounded-full bg-emerald-500/40"
-                    style={{ boxShadow: "0 0 8px rgba(0, 255, 136,0.6)" }} />
-                </div>
+            {/* Empty state */}
+            {!result && !compareResult && !isLoading && <EmptyState />}
+
+            {/* Loading placeholder */}
+            {isLoading && !result && !compareResult && (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-sm h-20"
+                    style={{
+                      background: "rgba(0,5,16,0.5)",
+                      border: "1px solid rgba(255,255,255,0.04)",
+                      borderLeft: "2px solid rgba(0,255,136,0.08)",
+                      animation: `pulse 1.5s ease-in-out ${i * 0.1}s infinite`,
+                    }}
+                  />
+                ))}
               </div>
-              {[28, 44, 56].map((size, i) => (
-                <div key={i}
-                  className="absolute top-1/2 left-1/2 rounded-full border border-emerald-400/8"
-                  style={{
-                    width: size * 2,
-                    height: size * 2,
-                    marginLeft: -size,
-                    marginTop: -size,
-                    animation: `spin ${6 + i * 2}s linear infinite`,
-                    animationDirection: i % 2 === 0 ? "normal" : "reverse",
-                  }} />
-              ))}
-            </div>
-            <div className="text-[9px] uppercase tracking-[0.3em] text-neutral-700 mb-1">// STANDBY</div>
-            <div className="text-[11px] text-neutral-600 uppercase tracking-widest animate-pulse">
-              AWAITING QUERY INPUT
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes scanPulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>

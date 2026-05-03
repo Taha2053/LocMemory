@@ -31,7 +31,7 @@ export function DomainsPanel() {
   const maxCount = top.length > 0 ? top[0].total : 1
 
   return (
-    <HudPanel id="SYS.DOM.04" className="hud-panel hud-panel-2" progressValue={top.length > 0 ? 72 : 10}>
+    <HudPanel id="Knowledge Domains" className="hud-panel hud-panel-2 p-4" progressValue={top.length > 0 ? 72 : 10}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] uppercase tracking-widest text-neutral-400">
           Knowledge Domains
