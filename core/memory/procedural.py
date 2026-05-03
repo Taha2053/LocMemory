@@ -161,7 +161,8 @@ class ProceduralDetector:
         embedding = None
         try:
             from core.memory.classifier import MemoryClassifier
-            classifier = MemoryClassifier()
+            threshold = get_config().get("classification", "similarity_threshold", 0.45)
+            classifier = MemoryClassifier(confidence_threshold=threshold)
             embedding = classifier._embed([combined_text])[0]
         except Exception:
             pass

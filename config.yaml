@@ -49,6 +49,14 @@ retrieval:
   max_results: 20
   min_similarity: 0.35
   traversal_depth: 2
+  necessity_heuristic: true
+  necessity_min_confidence: 0.5
+  exclude_patterns:
+    - "^(hello|hi|hey|good morning|good afternoon|good evening)"
+    - "^(thank|thanks|thank you)"
+    - "^(ok|okay|yes|no|sure|yep|nope)"
+    - "^(exit|quit|bye|goodbye)"
+  require_patterns: []
 
 classification:
   domains:

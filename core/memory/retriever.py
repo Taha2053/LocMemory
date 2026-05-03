@@ -72,7 +72,9 @@ class GraphRetriever:
         min_semantic_score: float = 0.15,
     ):
         self.graph_manager = graph_manager
-        self.classifier = classifier or MemoryClassifier()
+        _config = get_config()
+        threshold = _config.get("classification", "similarity_threshold", 0.45)
+        self.classifier = classifier or MemoryClassifier(confidence_threshold=threshold)
         self.max_candidates = max_candidates
         self.traversal_depth = traversal_depth
         self.cross_domain_threshold = cross_domain_threshold

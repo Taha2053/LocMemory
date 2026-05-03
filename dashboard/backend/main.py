@@ -80,7 +80,8 @@ async def lifespan(app: FastAPI):
     gm.initialize_db()
     gm.load_graph()
 
-    classifier = MemoryClassifier()
+    threshold = config.get("classification", "similarity_threshold", 0.45)
+    classifier = MemoryClassifier(confidence_threshold=threshold)
     retriever  = GraphRetriever(gm, classifier=classifier)
     hebbian    = HebbianUpdater(gm)
     consolidator = MemoryConsolidator(gm)

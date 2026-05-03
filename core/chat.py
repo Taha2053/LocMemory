@@ -17,8 +17,10 @@ import sys
 from rich.console import Console
 
 from core.memory import GraphManager, GraphRetriever, MemoryExtractor, MemoryClassifier
+from core.memory.necessity import RetrievalNecessityHeuristic
 from core.context import pack_context, build_prompt
 from core.llm import load_config, call_llm, is_model_available, resolve_model
+from core.settings.config import get_config
 from core.tui import CommandHandler
 
 
@@ -127,18 +129,31 @@ def run_pipeline(
     extractor: MemoryExtractor,
     model: str,
     extraction_enabled: bool = True,
+    use_necessity_heuristic: bool = True,
 ) -> str:
     """
     Execute one chat turn:
+      0. Check retrieval necessity heuristic (optional)
       1. Retrieve relevant memory nodes from the cognitive graph
       2. Pack them within the token budget
       3. Build the final prompt
       4. Call the LLM
       5. Queue background fact extraction for the user message + response
     """
+    candidates = []
+    retrieval_reason = "default"
 
-    # Step 1 — graph retrieval (returns list[dict])
-    candidates = retriever.retrieve(user_input)
+    if use_necessity_heuristic:
+        heuristic = RetrievalNecessityHeuristic()
+        requires_retrieval, retrieval_reason = heuristic.should_retrieve(user_input)
+        
+        if not requires_retrieval:
+            print(DIM + f"  [heuristic] skipped retrieval: {retrieval_reason}" + RESET)
+            candidates = []
+        else:
+            candidates = retriever.retrieve(user_input)
+    else:
+        candidates = retriever.retrieve(user_input)
 
     # Step 2 — greedy pack
     packed = pack_context(candidates, token_budget=TOKEN_BUDGET)
@@ -196,7 +211,9 @@ def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, str]:
     gm.initialize_db()
     gm.load_graph()
 
-    classifier = MemoryClassifier()
+    config = get_config()
+    threshold = config.get("classification", "similarity_threshold", 0.45)
+    classifier = MemoryClassifier(confidence_threshold=threshold)
     retriever  = GraphRetriever(gm, classifier=classifier)
     extractor  = MemoryExtractor(gm, classifier=classifier, ollama_model=model)
 
