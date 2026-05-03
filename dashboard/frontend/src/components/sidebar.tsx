@@ -14,7 +14,11 @@ const links = [
   { to: "/guide",     label: "Guide",     icon: BookOpen,      id: "08", desc: "How it works" },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -28,7 +32,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="relative flex h-screen w-56 flex-col font-mono overflow-hidden select-none"
+      className="relative flex h-screen w-56 lg:w-56 flex-col font-mono overflow-hidden select-none"
       style={{
         background: "linear-gradient(180deg, #020d0d 0%, #010f0f 50%, #020d0d 100%)",
         borderRight: "1px solid rgba(0, 196, 188, 0.12)",
@@ -125,6 +129,7 @@ export function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onNavigate}
             className={({ isActive }) =>
               cn(
                 "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-[11px] uppercase tracking-widest transition-all duration-200 overflow-hidden",
