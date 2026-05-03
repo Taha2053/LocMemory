@@ -74,6 +74,8 @@ function hashId(str: string): number {
 // Base scale in world units — using unit PlaneGeometry(1,1)
 const MARKER_BASE_SCALE = 0.05
 const ZOOM_DISTANCE = 0.35
+// Scale nodes inward so they sit inside the brain boundary
+const INWARD_SCALE = 0.88
 const DEFAULT_CAM_Z = 1.9
 const DEFAULT_CAM_Z_MOBILE = 2.9
 
@@ -118,6 +120,7 @@ export function BrainScene({
     const renderer = new WebGLRenderer({
       alpha: true,
       antialias: window.devicePixelRatio === 1,
+      stencil: true,
     })
     renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio))
     container.appendChild(renderer.domElement)
@@ -165,6 +168,8 @@ export function BrainScene({
     let brainWireframe: LineSegments | null = null
     let brainDots: Points | null = null
     let stars: Points | null = null
+    // Stencil clipping group for nodes/edges
+    let clipGroup: Object3D | null = null
 
     // Shared glow texture for all three bloom layers
     const glowTex = createGlowTexture()
@@ -451,12 +456,12 @@ export function BrainScene({
             nodeTiers.push(n.tier)
             baseScales.push(MARKER_BASE_SCALE)
             const vIdx = hashId(n.id) % positionCount
+            const x = positionsArr[vIdx * 3]
+            const y = positionsArr[vIdx * 3 + 1]
+            const z = positionsArr[vIdx * 3 + 2]
+            // Scale inward to keep nodes inside brain boundary
             nodePositions.push(
-              new Vector3(
-                positionsArr[vIdx * 3],
-                positionsArr[vIdx * 3 + 1],
-                positionsArr[vIdx * 3 + 2],
-              ),
+              new Vector3(x * INWARD_SCALE, y * INWARD_SCALE, z * INWARD_SCALE),
             )
           })
 
@@ -529,10 +534,14 @@ export function BrainScene({
           if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
           if (bloomMesh.instanceColor) bloomMesh.instanceColor.needsUpdate = true
 
-          // Add bloom first (back), then halo, then core (front)
-          scene.add(bloomMesh)
-          scene.add(haloMesh)
-          scene.add(markersMesh)
+          // Create clip group for nodes/edges (scaled inward via INWARD_SCALE)
+          clipGroup = new Object3D()
+          scene.add(clipGroup)
+
+          // Add bloom first (back), then halo, then core (front) to clip group
+          clipGroup.add(bloomMesh)
+          clipGroup.add(haloMesh)
+          clipGroup.add(markersMesh)
 
           if (selectedRef.current) applySelection(selectedRef.current)
 
@@ -566,7 +575,7 @@ export function BrainScene({
               })
               edgesLine = new LineSegments(eg, em)
               edgesLine.renderOrder = 1
-              scene.add(edgesLine)
+              clipGroup.add(edgesLine)
             }
           }
         })
