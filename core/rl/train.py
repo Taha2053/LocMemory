@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 from core.memory.graph import GraphManager
 from core.memory.classifier import MemoryClassifier
@@ -238,7 +238,7 @@ class RetrievalTrainer:
                 embedding_model=self._embedding_model,
             )
 
-        env = make_vec_env(make_env, n_envs=1)
+        env = DummyVecEnv([make_env])
 
         # Create PPO agent
         model = PPO(
@@ -253,7 +253,6 @@ class RetrievalTrainer:
             gae_lambda=0.95,
             clip_range=0.2,
             ent_coef=0.01,
-            tensorboard_log="data/tensorboard",
         )
 
         # Create log file
