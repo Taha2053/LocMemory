@@ -13,7 +13,6 @@ import { MemoryInspector } from "@/components/MemoryInspector"
 import { HebbianPanel } from "@/components/HebbianPanel"
 import { PatternsPanel } from "@/components/PatternsPanel"
 import { DomainsPanel } from "@/components/DomainsPanel"
-import { useTheme } from "@/lib/theme"
 
 interface RLStatus {
   enabled: boolean
@@ -26,7 +25,6 @@ interface RLStatus {
 }
 
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
-const TIER_RGB = ["0,255,136", "0,229,255", "170,255,0", "0,255,102"] as const
 
 const TIER_LABELS = [
   "Context",
@@ -43,7 +41,6 @@ const TIER_DESC = [
 ]
 
 export function GraphPage() {
-  const { theme } = useTheme()
   const [selected, setSelected] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
@@ -90,22 +87,18 @@ export function GraphPage() {
   const totalEdges = stats?.edges ?? 0
 
   return (
-    <div className={`relative h-full w-full overflow-hidden font-mono ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
-      {/* Layer 0: Matrix rain background - dark only */}
-      {theme === "dark" && (
-        <div className="absolute inset-0 z-0">
-          <MatrixRain
-            fontSize={14}
-            speed={60}
-            foreground="#00ff88"
-            background="#020d0d"
-            opacity={0.07}
-          />
-        </div>
-      )}
+    <div className="relative h-full w-full overflow-hidden font-mono bg-[#020d0d]">
+      {/* Layer 0: Matrix rain background */}
+      <div className="absolute inset-0 z-0">
+        <MatrixRain
+          fontSize={14}
+          speed={60}
+          opacity={0.07}
+        />
+      </div>
 
       {/* Layer 1: Dark base */}
-      <div className={`absolute inset-0 z-[1] ${theme === "dark" ? "bg-[#020d0d]/95" : "bg-slate-100/95"}`} />
+      <div className="absolute inset-0 z-[1] bg-[#020d0d]/95" />
 
       {/* Layer 2: Radial glow */}
       <div

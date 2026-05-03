@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from "react"
 import { api, type Domain } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { useNavigate } from "react-router-dom"
-import { useTheme } from "@/lib/theme"
 
 const DOMAIN_COLORS: Record<string, string> = {
   health:      "#00ff88",
@@ -301,11 +300,9 @@ export function DomainsPage() {
     navigate(`/memories?domain=${domainName}`)
   }
 
-  const { theme } = useTheme()
-
   return (
-    <div className={`relative flex flex-col h-full min-h-0 font-mono overflow-hidden ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-50"}`}>
-      {theme === "dark" && <ScanlineOverlay />}
+    <div className="relative flex flex-col h-full min-h-0 font-mono overflow-hidden bg-[#020d0d]">
+      <ScanlineOverlay />
 
       <div className="pointer-events-none absolute inset-0"
         style={{ background: "radial-gradient(ellipse at 20% 0%, rgba(0,255,136,0.05), transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(0,229,255,0.04), transparent 50%)" }} />
@@ -386,7 +383,7 @@ export function DomainsPage() {
                   no domains
                 </div>
               ) : (
-                filtered.map((d, idx) => (
+                filtered.map((d, _idx) => (
                   <DomainRow
                     key={d.name}
                     domain={d}

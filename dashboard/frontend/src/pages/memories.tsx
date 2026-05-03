@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom"
 import { api, type Memory, type MemoryDetail, type Domain } from "@/lib/api"
 import { ChevronDown, ChevronRight, X, Plus, Pencil, Trash2, Copy, Check, ArrowUpDown } from "lucide-react"
 import { ScanlineOverlay } from "@/components/hud"
-import { useTheme } from "@/lib/theme"
 
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 const TIER_LABELS = [
@@ -538,14 +537,12 @@ export function MemoriesPage() {
     }
   }
 
-  const { theme } = useTheme()
-
   return (
-    <div className={`relative flex h-full min-h-0 font-mono ${theme === "dark" ? "bg-[#020d0d]" : "bg-slate-100"}`}>
-      {theme === "dark" && <ScanlineOverlay />}
+    <div className="relative flex h-full min-h-0 font-mono bg-[#020d0d]">
+      <ScanlineOverlay />
 
       <div className="pointer-events-none absolute inset-0 z-0"
-        style={{ background: theme === "dark" ? "radial-gradient(ellipse at 0% 50%, rgba(0,255,136,0.06), transparent 40%)" : "radial-gradient(ellipse at 0% 50%, rgba(0,196,188,0.03), transparent 40%)" }} />
+        style={{ background: "radial-gradient(ellipse at 0% 50%, rgba(0,255,136,0.06), transparent 40%)" }} />
 
       {/* ── Domain sidebar ── */}
       <div

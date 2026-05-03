@@ -185,6 +185,21 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rating }),
     }).then((r) => j(r)),
+  rlTrain: (): Promise<{ ok: boolean; message: string }> =>
+    fetch(`${BASE}/rl/train`, { method: "POST" }).then((r) => j(r)),
+  rlTrainCancel: (): Promise<{ ok: boolean }> =>
+    fetch(`${BASE}/rl/train/cancel`, { method: "POST" }).then((r) => j(r)),
+  rlTrainStatus: (): Promise<{
+    running: boolean
+    progress: number
+    total: number
+    last_reward: number | null
+    log: string[]
+    done: boolean
+    error: string | null
+  }> => fetch(`${BASE}/rl/train/status`).then((r) => j(r)),
+  rlReload: (): Promise<{ ok: boolean; available: boolean; message: string }> =>
+    fetch(`${BASE}/rl/reload`, { method: "POST" }).then((r) => j(r)),
   compareRetrieve: (query: string, limit = 5): Promise<{
     query: string
     query_domain: string

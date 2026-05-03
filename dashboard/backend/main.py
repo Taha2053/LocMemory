@@ -48,6 +48,15 @@ state: dict = {
     "rl_agent": None,
     "logger": None,
     "encryptor": None,
+    "rl_training": {
+        "running": False,
+        "progress": 0,
+        "total": 0,
+        "last_reward": None,
+        "log": [],
+        "done": False,
+        "error": None,
+    },
     "addition_count": 0,      # triggers consolidation every 30
     "interaction_count": 0,   # triggers procedural detection every 50
 }
@@ -223,6 +232,138 @@ def rl_status():
         "top_k": config.get("rl", "top_k", 5),
         "token_budget": config.get("rl", "token_budget", 512),
     }
+
+
+@app.post("/api/rl/train")
+def rl_train(background_tasks: BackgroundTasks):
+    """Start RL agent training in a background thread."""
+    ts = state["rl_training"]
+    if ts["running"]:
+        return {"ok": False, "message": "Training already running"}
+
+    config = get_config()
+    total_steps = config.get("rl", "training_timesteps", 10000)
+
+    ts.update({
+        "running": True,
+        "progress": 0,
+        "total": total_steps,
+        "last_reward": None,
+        "log": [],
+        "done": False,
+        "error": None,
+    })
+
+    def _train():
+        import threading
+        import numpy as np
+        try:
+            from stable_baselines3 import PPO
+            from stable_baselines3.common.vec_env import DummyVecEnv
+            from core.rl.train import SyntheticRetrievalEnv
+            from core.memory.classifier import MemoryClassifier
+
+            cfg = get_config()
+            pool_size = cfg.get("rl", "candidate_pool_size", 25)
+            top_k = cfg.get("rl", "top_k", 5)
+            budget = cfg.get("rl", "token_budget", 512)
+            steps = cfg.get("rl", "training_timesteps", 10000)
+            model_path = cfg.get("rl", "model_path", "data/rl_agent.zip")
+
+            ts["log"].append("Loading embedding model...")
+            classifier = MemoryClassifier(confidence_threshold=0.45)
+            emb_model = classifier._model
+
+            def make_env():
+                return SyntheticRetrievalEnv(
+                    candidate_pool_size=pool_size,
+                    top_k=top_k,
+                    token_budget=budget,
+                    embedding_dim=384,
+                    embedding_model=emb_model,
+                )
+
+            env = DummyVecEnv([make_env])
+            model = PPO(
+                "MlpPolicy", env, verbose=0,
+                learning_rate=3e-4, n_steps=512, batch_size=64,
+                n_epochs=10, gamma=0.99, gae_lambda=0.95,
+                clip_range=0.2, ent_coef=0.01,
+            )
+
+            chunk = 1000
+            ts["log"].append(f"Training for {steps} steps ({steps // chunk} chunks)...")
+
+            for step in range(0, steps, chunk):
+                if not ts["running"]:
+                    ts["log"].append("Training cancelled.")
+                    break
+
+                model.learn(total_timesteps=chunk, progress_bar=False, reset_num_timesteps=False)
+
+                eval_rewards = []
+                eval_env = make_env()
+                for _ in range(5):
+                    obs, _ = eval_env.reset()
+                    total_r = 0.0
+                    done = False
+                    while not done:
+                        action, _ = model.predict(obs, deterministic=True)
+                        obs, reward, terminated, truncated, _ = eval_env.step(action)
+                        total_r += float(reward)
+                        done = terminated or truncated
+                    eval_rewards.append(total_r)
+
+                mean_r = float(np.mean(eval_rewards))
+                ts["progress"] = step + chunk
+                ts["last_reward"] = round(mean_r, 4)
+                ts["log"].append(f"Step {step + chunk}/{steps} — reward {mean_r:.4f}")
+
+            Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+            model.save(model_path)
+            ts["log"].append(f"Model saved to {model_path}")
+            ts["done"] = True
+
+        except Exception as exc:
+            ts["error"] = str(exc)
+            ts["log"].append(f"ERROR: {exc}")
+        finally:
+            ts["running"] = False
+
+    import threading
+    threading.Thread(target=_train, daemon=True).start()
+    return {"ok": True, "message": "Training started"}
+
+
+@app.post("/api/rl/train/cancel")
+def rl_train_cancel():
+    """Cancel an in-progress training run."""
+    state["rl_training"]["running"] = False
+    return {"ok": True}
+
+
+@app.get("/api/rl/train/status")
+def rl_train_status():
+    """Return current training progress."""
+    return state["rl_training"]
+
+
+@app.post("/api/rl/reload")
+def rl_reload():
+    """Reload the RL agent from disk after training."""
+    config = get_config()
+    model_path = config.get("rl", "model_path", "data/rl_agent.zip")
+    try:
+        from core.rl.agent import RLAgent
+        agent = RLAgent(model_path)
+        state["rl_agent"] = agent
+        return {
+            "ok": True,
+            "available": agent.is_available(),
+            "message": "Agent reloaded" if agent.is_available() else "Model file not found or failed to load",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─────────────────────────── /api/stats ───────────────────────────
