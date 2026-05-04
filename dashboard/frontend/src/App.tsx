@@ -13,6 +13,7 @@ import { GuidePage } from "@/pages/guide"
 import { ChatPage } from "@/pages/chat"
 import { AboutPage } from "@/pages/about"
 import { MatrixIntro } from "@/components/MatrixIntro"
+import { ThemeProvider } from "@/context/ThemeContext"
 
 export default function App() {
   const [introComplete, setIntroComplete] = useState(
@@ -25,7 +26,17 @@ export default function App() {
   }
 
   return (
-    <>
+    <ThemeProvider>
+      <style>{`
+        :root {
+          --theme-primary: #00c4bc;
+          --theme-primary-dim: rgba(0, 196, 188, 0.3);
+          --theme-primary-glow: rgba(0, 196, 188, 0.6);
+          --theme-primary-border: rgba(0, 196, 188, 0.2);
+          --theme-primary-text: #00c4bc;
+          --theme-primary-text-dim: rgba(0, 196, 188, 0.6);
+        }
+      `}</style>
       {!introComplete && <MatrixIntro onComplete={handleIntroComplete} />}
       {introComplete && (
         <BrowserRouter>
@@ -45,6 +56,6 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       )}
-    </>
+    </ThemeProvider>
   )
 }

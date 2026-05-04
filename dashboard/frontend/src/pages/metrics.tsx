@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { api, type MetricsSummary } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { domainColor } from "@/lib/domainColors"
+import { useTheme } from "@/context/ThemeContext"
 import {
   Download, RefreshCw, TrendingUp, TrendingDown, Minus,
   Clock, Activity, Target, Zap, Star,
@@ -241,6 +242,7 @@ export function MetricsPage() {
   const [filterDomain, setFilterDomain] = useState<string | null>(null)
   const [refreshCountdown, setRefreshCountdown] = useState(30)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const { colors } = useTheme()
 
   // Rolling sparklines for KPI deltas (last ~24 fetches)
   const [series, setSeries] = useState<{
@@ -397,7 +399,7 @@ export function MetricsPage() {
       <div className="relative h-full min-h-0 font-mono overflow-y-auto bg-[#020d0d] custom-scrollbar">
         <ScanlineOverlay />
         <div className="flex items-center justify-center h-full">
-          <div className="text-[10px] uppercase tracking-widest text-emerald-500/50 animate-pulse flex items-center gap-2">
+          <div className="text-[10px] uppercase tracking-widest animate-pulse flex items-center gap-2" style={{ color: colors.primaryTextDim }}>
             <RefreshCw className="w-4 h-4 animate-spin" />
             LOADING METRICS...
           </div>
@@ -419,8 +421,7 @@ export function MetricsPage() {
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background:
-            "radial-gradient(ellipse at 0% 0%, rgba(0, 255, 136,0.08), transparent 40%), radial-gradient(ellipse at 100% 100%, rgba(0, 255, 136,0.06), transparent 40%)",
+          background: `radial-gradient(ellipse at 0% 0%, ${colors.primaryDim}, transparent 40%), radial-gradient(ellipse at 100% 100%, ${colors.primaryDim}, transparent 40%)`,
         }}
       />
 
@@ -429,12 +430,12 @@ export function MetricsPage() {
         <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <div className="h-px w-8 bg-emerald-400/40" />
-              <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Quality Metrics</span>
+              <div className="h-px w-8" style={{ background: colors.primaryBorder }} />
+              <span className="text-[9px] uppercase tracking-[0.3em]" style={{ color: colors.primaryTextDim }}>Quality Metrics</span>
             </div>
             <h1
-              className="text-2xl font-bold tracking-wide text-emerald-300"
-              style={{ textShadow: "0 0 20px rgba(0,255,136,0.4)" }}
+              className="text-2xl font-bold tracking-wide"
+              style={{ color: colors.primaryText, textShadow: `0 0 20px ${colors.primaryGlow}` }}
             >
               Retrieval Analytics
             </h1>

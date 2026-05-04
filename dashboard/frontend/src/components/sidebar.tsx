@@ -2,6 +2,13 @@
 import { Network, FileText, FolderTree, Search, Settings, BarChart2, BookOpen, MessageSquare, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { useTheme, type Theme } from "@/context/ThemeContext"
+
+const THEMES: { id: Theme; color: string; label: string }[] = [
+  { id: "teal", color: "#00c4bc", label: "Teal" },
+  { id: "blue", color: "#3b82f6", label: "Blue" },
+  { id: "purple", color: "#a855f7", label: "Purple" },
+]
 
 const links = [
   { to: "/graph",     label: "Graph",     icon: Network,       id: "01", desc: "Neural map" },
@@ -21,6 +28,7 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps) {
   const [tick, setTick] = useState(0)
+  const { theme, setTheme, colors } = useTheme()
 
   useEffect(() => {
     const t = setInterval(() => setTick(p => p + 1), 1000)
@@ -36,15 +44,15 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       className="relative flex h-screen w-56 lg:w-56 flex-col font-mono overflow-hidden select-none"
       style={{
         background: "linear-gradient(180deg, #020d0d 0%, #010f0f 50%, #020d0d 100%)",
-        borderRight: "1px solid rgba(0, 196, 188, 0.12)",
+        borderRight: `1px solid ${colors.primaryBorder}`,
       }}
     >
       {/* Animated right-edge glow */}
       <div
         className="pointer-events-none absolute right-0 top-0 h-full w-px"
         style={{
-          background: "linear-gradient(180deg, transparent 0%, rgba(0, 196, 188,0.45) 25%, rgba(255,140,38,0.45) 55%, rgba(255,77,109,0.3) 82%, transparent 100%)",
-          boxShadow: "0 0 8px rgba(0, 196, 188, 0.3)",
+          background: `linear-gradient(180deg, transparent 0%, ${colors.primaryDim} 25%, rgba(255,140,38,0.45) 55%, rgba(255,77,109,0.3) 82%, transparent 100%)`,
+          boxShadow: `0 0 8px ${colors.primaryDim}`,
         }}
       />
 
@@ -89,8 +97,11 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
           <div className="pt-1">
             <div
-              className="text-[18px] font-bold tracking-wide text-emerald-300"
-              style={{ textShadow: "0 0 12px rgba(0, 196, 188,0.6)" }}
+              className="text-[18px] font-bold tracking-wide"
+              style={{ 
+                color: colors.primaryText,
+                textShadow: `0 0 12px ${colors.primaryGlow}`,
+              }}
             >
               LocMemory
             </div>
@@ -115,6 +126,29 @@ export function Sidebar({ onNavigate }: SidebarProps) {
           >
             {hh}:{mm}:{ss}
           </span>
+        </div>
+
+        {/* Theme switcher */}
+        <div className="flex items-center gap-1.5 mt-3">
+          <span className="text-[8px] uppercase tracking-[0.15em] text-neutral-600">Theme</span>
+          <div className="flex gap-1">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                className={cn(
+                  "w-4 h-4 rounded-full transition-all duration-200",
+                  theme === t.id ? "ring-1 ring-offset-1 ring-offset-black" : "opacity-50 hover:opacity-80"
+                )}
+                style={{
+                  background: t.color,
+                  boxShadow: theme === t.id ? `0 0 8px ${t.color}` : `0 0 4px ${t.color}50`,
+                  ringColor: t.color,
+                }}
+                title={t.label}
+              />
+            ))}
+          </div>
         </div>
       </div>
 

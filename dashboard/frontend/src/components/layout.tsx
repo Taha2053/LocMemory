@@ -2,9 +2,11 @@ import { useState, useEffect } from "react"
 import { Outlet, NavLink } from "react-router-dom"
 import { Sidebar } from "./sidebar"
 import { Menu, X } from "lucide-react"
+import { useTheme } from "@/context/ThemeContext"
 
 function FooterBar() {
   const [time, setTime] = useState(() => new Date())
+  const { colors } = useTheme()
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
@@ -20,18 +22,18 @@ function FooterBar() {
       className="shrink-0 flex items-center justify-between px-5 font-mono select-none"
       style={{
         height: 30,
-        borderTop: "1px solid rgba(0,196,188,0.1)",
+        borderTop: `1px solid ${colors.primaryBorder}`,
         background: "linear-gradient(90deg, #020d0d 0%, #010f0f 50%, #020d0d 100%)",
-        boxShadow: "0 -1px 20px rgba(0,196,188,0.04)",
+        boxShadow: `0 -1px 20px ${colors.primaryDim}`,
       }}
     >
       {/* Left — system tag */}
       <div className="flex items-center gap-2">
         <div
           className="h-1 w-1 rounded-full"
-          style={{ background: "#00c4bc", boxShadow: "0 0 4px rgba(0,196,188,0.9)", animation: "footer-pulse 2s ease-in-out infinite" }}
+          style={{ background: colors.primary, boxShadow: `0 0 4px ${colors.primaryGlow}`, animation: "footer-pulse 2s ease-in-out infinite" }}
         />
-        <span className="text-[8px] uppercase tracking-[0.28em]" style={{ color: "rgba(0,196,188,0.35)" }}>
+        <span className="text-[8px] uppercase tracking-[0.28em]" style={{ color: colors.primaryTextDim }}>
           SYS:LOCMEMORY
         </span>
         <span className="text-[8px]" style={{ color: "rgba(0,196,188,0.15)" }}>·</span>

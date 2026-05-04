@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import { api, ChatMessage, ChatResponse, RetrievedResult } from "@/lib/api"
 import { Send, Brain, Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useTheme } from "@/context/ThemeContext"
 
 const TIER_COLORS: Record<number, string> = {
   1: "rgba(0,196,188,0.8)",
@@ -51,6 +52,7 @@ function MemoryBadge({ m }: { m: RetrievedResult }) {
 function AssistantBubble({ turn }: { turn: Turn }) {
   const [open, setOpen] = useState(false)
   const hasMemories = (turn.memories?.length ?? 0) > 0
+  const { colors } = useTheme()
 
   return (
     <div className="flex flex-col gap-1 max-w-[80%]">
@@ -58,9 +60,9 @@ function AssistantBubble({ turn }: { turn: Turn }) {
       <div
         className="rounded px-4 py-3 text-sm leading-relaxed text-neutral-200 font-mono whitespace-pre-wrap"
         style={{
-          background: "linear-gradient(135deg, rgba(0,196,188,0.08) 0%, rgba(0,0,0,0.4) 100%)",
-          border: "1px solid rgba(0,196,188,0.18)",
-          boxShadow: "0 0 12px rgba(0,196,188,0.04)",
+          background: `linear-gradient(135deg, ${colors.primaryDim} 0%, rgba(0,0,0,0.4) 100%)`,
+          border: `1px solid ${colors.primaryBorder}`,
+          boxShadow: `0 0 12px ${colors.primaryDim}`,
         }}
       >
         {turn.error ? (
@@ -88,7 +90,8 @@ function AssistantBubble({ turn }: { turn: Turn }) {
         {hasMemories && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-auto flex items-center gap-1 text-[9px] text-emerald-700 hover:text-emerald-400 transition-colors font-mono uppercase tracking-wider"
+            className="ml-auto flex items-center gap-1 text-[9px] hover:text-emerald-400 transition-colors font-mono uppercase tracking-wider"
+            style={{ color: colors.primaryTextDim }}
           >
             <Brain className="w-2.5 h-2.5" />
             {turn.memories!.length} mem
@@ -103,10 +106,10 @@ function AssistantBubble({ turn }: { turn: Turn }) {
           className="rounded px-3 py-2 space-y-1.5"
           style={{
             background: "rgba(0,0,0,0.25)",
-            border: "1px solid rgba(0,196,188,0.1)",
+            border: `1px solid ${colors.primaryBorder}`,
           }}
         >
-          <div className="text-[8px] uppercase tracking-widest text-emerald-700/60 mb-2">
+          <div className="text-[8px] uppercase tracking-widest mb-2" style={{ color: colors.primaryTextDim }}>
             Retrieved memories
           </div>
           {turn.memories!.map((m, i) => (
@@ -139,6 +142,7 @@ export function ChatPage() {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { colors } = useTheme()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -156,24 +160,68 @@ export function ChatPage() {
     setTurns(prev => [...prev, { role: "user", content: msg }])
     setLoading(true)
 
+    // Add placeholder for streaming response
+    setTurns(prev => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "",
+        memories: [],
+        model: undefined,
+        tokens: undefined,
+        retrieval_ms: undefined,
+      },
+    ])
+
+    let streamedContent = ""
+    let metadata = { retrieval_ms: 0, memories_used: 0 }
+
     try {
+      for await (const event of api.chatStream(msg, history)) {
+        if (event.type === "metadata") {
+          metadata = { retrieval_ms: event.retrieval_ms, memories_used: event.memories_used }
+        } else if (event.type === "token") {
+          streamedContent += event.content
+          // Update the last turn with streamed content
+          setTurns(prev => {
+            const newTurns = [...prev]
+            const lastTurn = newTurns[newTurns.length - 1]
+            if (lastTurn && lastTurn.role === "assistant") {
+              lastTurn.content = streamedContent
+            }
+            return newTurns
+          })
+        } else if (event.type === "done") {
+          break
+        } else if (event.type === "error") {
+          throw new Error(event.content)
+        }
+      }
+
+      // Fetch full response for memories and metadata
       const resp: ChatResponse = await api.chat(msg, history)
-      setTurns(prev => [
-        ...prev,
-        {
-          role: "assistant",
-          content: resp.response,
-          memories: resp.memories_used,
-          model: resp.model,
-          tokens: resp.tokens,
-          retrieval_ms: resp.retrieval_ms,
-        },
-      ])
+      setTurns(prev => {
+        const newTurns = [...prev]
+        const lastTurn = newTurns[newTurns.length - 1]
+        if (lastTurn && lastTurn.role === "assistant") {
+          lastTurn.content = resp.response
+          lastTurn.memories = resp.memories_used
+          lastTurn.model = resp.model
+          lastTurn.tokens = resp.tokens
+          lastTurn.retrieval_ms = resp.retrieval_ms
+        }
+        return newTurns
+      })
     } catch (e: any) {
-      setTurns(prev => [
-        ...prev,
-        { role: "assistant", content: e?.message ?? "Request failed", error: true },
-      ])
+      setTurns(prev => {
+        const newTurns = [...prev]
+        const lastTurn = newTurns[newTurns.length - 1]
+        if (lastTurn && lastTurn.role === "assistant") {
+          lastTurn.content = e?.message ?? "Request failed"
+          lastTurn.error = true
+        }
+        return newTurns
+      })
     } finally {
       setLoading(false)
       textareaRef.current?.focus()
@@ -192,13 +240,13 @@ export function ChatPage() {
       {/* header */}
       <div
         className="shrink-0 px-6 py-3 flex items-center gap-3"
-        style={{ borderBottom: "1px solid rgba(0,196,188,0.10)" }}
+        style={{ borderBottom: `1px solid ${colors.primaryBorder}` }}
       >
         <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-emerald-400" style={{ filter: "drop-shadow(0 0 4px rgba(0,196,188,0.8))" }} />
-          <span className="text-emerald-300 text-sm tracking-widest uppercase">Chat</span>
+          <Zap className="w-4 h-4" style={{ filter: `drop-shadow(0 0 4px ${colors.primaryGlow})`, color: colors.primary }} />
+          <span className="text-sm tracking-widest uppercase" style={{ color: colors.primaryText }}>Chat</span>
         </div>
-        <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0,196,188,0.3), transparent)" }} />
+        <div className="h-px flex-1" style={{ background: `linear-gradient(to right, ${colors.primaryDim}, transparent)` }} />
         <span className="text-[9px] text-neutral-700 uppercase tracking-widest">Memory-augmented LLM</span>
       </div>
 
@@ -228,8 +276,8 @@ export function ChatPage() {
         {loading && (
           <div className="flex justify-start">
             <div
-              className="flex items-center gap-2 px-4 py-3 rounded text-xs text-emerald-500"
-              style={{ border: "1px solid rgba(0,196,188,0.15)", background: "rgba(0,196,188,0.04)" }}
+              className="flex items-center gap-2 px-4 py-3 rounded text-xs"
+              style={{ border: `1px solid ${colors.primaryBorder}`, background: colors.primaryDim, color: colors.primaryText }}
             >
               <Loader2 className="w-3 h-3 animate-spin" />
               <span className="tracking-widest uppercase text-[9px]">Thinking…</span>
@@ -243,13 +291,13 @@ export function ChatPage() {
       {/* input bar */}
       <div
         className="shrink-0 px-4 py-3"
-        style={{ borderTop: "1px solid rgba(0,196,188,0.10)" }}
+        style={{ borderTop: `1px solid ${colors.primaryBorder}` }}
       >
         <div
           className="flex items-end gap-2 rounded px-3 py-2"
           style={{
-            background: "rgba(0,196,188,0.04)",
-            border: "1px solid rgba(0,196,188,0.15)",
+            background: colors.primaryDim,
+            border: `1px solid ${colors.primaryBorder}`,
           }}
         >
           <textarea
@@ -272,11 +320,11 @@ export function ChatPage() {
               "shrink-0 p-2 rounded transition-all duration-200",
               loading || !input.trim()
                 ? "text-neutral-700 cursor-not-allowed"
-                : "text-emerald-400 hover:text-emerald-300"
+                : ""
             )}
             style={
               !loading && input.trim()
-                ? { filter: "drop-shadow(0 0 4px rgba(0,196,188,0.6))" }
+                ? { color: colors.primaryText, filter: `drop-shadow(0 0 4px ${colors.primaryGlow})` }
                 : {}
             }
           >

@@ -230,6 +230,42 @@ def _call_anthropic(
 
 
 # ─────────────────────────────────────────────
+# 3b. Ollama streaming
+# ─────────────────────────────────────────────
+
+def call_ollama_stream(
+    prompt: str,
+    model: str,
+    system: str | None = None,
+):
+    """Yield tokens from Ollama model as they arrive."""
+    try:
+        import ollama as _ollama
+    except ImportError:
+        raise ImportError("ollama package not installed. Run: pip install ollama")
+
+    resolved = resolve_model(model)
+    if resolved:
+        model = resolved
+
+    if system:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+    else:
+        messages = [{"role": "user", "content": prompt}]
+
+    try:
+        stream = _ollama.chat(model=model, messages=messages, stream=True)
+        for chunk in stream:
+            if "message" in chunk and "content" in chunk["message"]:
+                yield chunk["message"]["content"]
+    except Exception as e:
+        yield f"[Error: {e}]"
+
+
+# ─────────────────────────────────────────────
 # 4. Core dispatcher
 # ─────────────────────────────────────────────
 
@@ -308,6 +344,39 @@ def call_llm(
     print(f"  Response length: {len(resp.text)} chars")
 
     return resp
+
+
+def call_llm_stream(
+    prompt: str,
+    model: str | None = None,
+    system: str | None = None,
+    provider: str | None = None,
+):
+    """
+    Stream tokens from the configured LLM backend.
+    Yields tokens as they arrive for real-time display.
+
+    Currently only supports Ollama streaming.
+    Other providers fall back to non-streaming.
+    """
+    config = load_config()
+
+    if provider is None:
+        llm_cfg = (config.get("models") or {}).get("llm") or {}
+        provider = llm_cfg.get("provider", "ollama")
+
+    if model is None:
+        model = config.get("LLM_MODEL", "mistral:7b-instruct")
+
+    provider = provider.lower().strip()
+
+    if provider == "ollama":
+        for token in call_ollama_stream(prompt, model, system):
+            yield token
+    else:
+        # Non-streaming fallback - yield all at once
+        resp = call_llm(prompt, model, system, provider)
+        yield resp.text
 
 
 # ─────────────────────────────────────────────

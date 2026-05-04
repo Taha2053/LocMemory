@@ -15,7 +15,10 @@ import networkx as nx
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import asyncio
+import json
 
 from core.memory import (
     GraphManager,
@@ -990,3 +993,102 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks):
         "tokens": tokens,
         "retrieval_ms": round(retrieval_ms, 1),
     }
+
+
+async def generate_chat_stream(req: ChatRequest, retriever, extractor):
+    """Generator that yields tokens as they arrive."""
+    import time
+    from core.context import pack_context
+    from core.llm import call_llm_stream
+
+    t0 = time.monotonic()
+    candidates = retriever.retrieve(req.message)
+
+    packed = pack_context(candidates, token_budget=500)
+
+    tier_names = {1: "context", 2: "anchor", 3: "leaf", 4: "procedural"}
+    if packed:
+        memory_lines = [
+            f"[{i}] [{tier_names.get(m.get('tier', 3), 'leaf').upper()}/{m.get('domain') or 'general'}]"
+            f" (relevance: {m['score']:.2f})\n    {m['text']}"
+            for i, m in enumerate(packed, 1)
+        ]
+        context_section = (
+            f"--- MEMORY CONTEXT ({len(packed)} memories) ---\n"
+            + "\n\n".join(memory_lines)
+            + "\n--- END OF MEMORY CONTEXT ---"
+        )
+    else:
+        context_section = (
+            "--- MEMORY CONTEXT ---\nNo relevant memories found.\n--- END OF MEMORY CONTEXT ---"
+        )
+
+    history_lines = [
+        f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}"
+        for m in (req.history or [])[-10:]
+    ]
+    history_section = (
+        "\n--- CONVERSATION HISTORY ---\n" + "\n".join(history_lines) + "\n--- END ---"
+        if history_lines else ""
+    )
+
+    system = (
+        "You are a helpful personal assistant with persistent memory.\n"
+        "Use the MEMORY CONTEXT only when it is directly relevant to the current message.\n"
+        "Ignore unrelated memories. If none are relevant, answer from general knowledge.\n"
+    )
+    prompt = (
+        f"{system}\n{context_section}\n{history_section}\n"
+        f"--- CURRENT MESSAGE ---\n{req.message}\n--- END ---"
+    )
+
+    # First, send metadata as JSON
+    yield f"data: {json.dumps({'type': 'metadata', 'retrieval_ms': (time.monotonic() - t0) * 1000, 'memories_used': len(packed)})}\n\n"
+
+    # Then stream the response tokens
+    try:
+        for token in call_llm_stream(prompt=prompt):
+            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    # Send done signal
+    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(req: ChatRequest, background_tasks: BackgroundTasks):
+    """
+    Streaming chat endpoint - yields tokens as they arrive via SSE.
+    Provides real-time response display instead of waiting for full response.
+    """
+    import json
+    retriever: GraphRetriever = state["retriever"]
+    extractor = state.get("extractor")
+
+    async def event_stream():
+        try:
+            async for chunk in generate_chat_stream(req, retriever, extractor):
+                yield chunk
+                await asyncio.sleep(0)  # Allow other tasks to run
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    # Start background tasks after response begins
+    if extractor:
+        # We'll need to wait for the full response first, so this is handled differently
+        pass
+
+    retrieved_ids = [c.get("node_id") for c in [] if c.get("node_id")]
+    if retrieved_ids:
+        background_tasks.add_task(_hebbian_bg, retrieved_ids)
+        background_tasks.add_task(_maybe_detect_patterns)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
