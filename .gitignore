@@ -33,4 +33,3 @@ docs/
 # Ignore secret key
 data/secret.key
 data/rl_agent.zip
-*png
