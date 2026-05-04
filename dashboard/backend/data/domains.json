@@ -38,6 +38,11 @@
       "learning, study, course, tutorial, book, research, education, practice, training, knowledge",
       "Studying machine learning algorithms",
       "Read a book about reinforcement learning"
+    ],
+    "user interface/user experience design": [
+      "user",
+      "Related to user interface/user experience design",
+      "user interface/user experience design activities and topics"
     ]
   },
   "subdomains": {
@@ -75,6 +80,7 @@
       "tutorials",
       "practice",
       "research"
-    ]
+    ],
+    "user interface/user experience design": []
   }
 }
