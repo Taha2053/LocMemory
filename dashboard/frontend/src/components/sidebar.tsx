@@ -1,5 +1,5 @@
 ﻿import { NavLink } from "react-router-dom"
-import { Network, FileText, FolderTree, Search, Settings, BarChart2, BookOpen, MessageSquare } from "lucide-react"
+import { Network, FileText, FolderTree, Search, Settings, BarChart2, BookOpen, MessageSquare, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
@@ -12,6 +12,7 @@ const links = [
   { to: "/metrics",   label: "Metrics",   icon: BarChart2,     id: "06", desc: "Quality analytics" },
   { to: "/settings",  label: "Settings",  icon: Settings,      id: "07", desc: "Config" },
   { to: "/guide",     label: "Guide",     icon: BookOpen,      id: "08", desc: "How it works" },
+  { to: "/about",     label: "About",     icon: Sparkles,      id: "09", desc: "Dedication" },
 ]
 
 interface SidebarProps {

@@ -36,9 +36,13 @@ DEFAULT_DOMAINS = {
         "Need to finish this task by Friday",
     ],
     "personal": [
-        "personal, family, friends, home, hobby, vacation, weekend, life, home, relationships",
+        "personal, family, friends, home, hobby, vacation, weekend, life, relationships, name, person, people",
         "Spent the weekend with family",
         "My dog needs a walk",
+        "A name or person I know",
+        "Just a casual everyday thought",
+        "Something about my daily life",
+        "A place, food, or thing from my world",
     ],
     "finance": [
         "finance, money, investment, savings, budget, income, expense, banking, stock, trading",
@@ -189,6 +193,10 @@ class MemoryClassifier:
         Detect the best matching domain for the input text.
 
         Returns (domain, confidence) tuple.
+
+        For very low-confidence inputs (single unknown words like proper
+        names, short fragments, foreign words), defaults to "personal" — the
+        catch-all category — rather than letting noise pick a winner.
         """
         text_embedding = self._embed([text])[0]
 
@@ -202,6 +210,27 @@ class MemoryClassifier:
 
         best_domain = max(scores, key=scores.get)
         confidence = scores[best_domain]
+
+        # Hard floor: when nothing scores meaningfully, default to "personal"
+        # rather than returning the noisy top-of-list. The runner-up margin
+        # is also checked — if the best is barely beating second place, it's
+        # noise.
+        sorted_scores = sorted(scores.values(), reverse=True)
+        runner_up = sorted_scores[1] if len(sorted_scores) > 1 else 0.0
+        margin = confidence - runner_up
+
+        is_unreliable = (
+            confidence < 0.30 or                # very low absolute score
+            (confidence < 0.45 and margin < 0.04)  # tied with another domain
+        )
+        if is_unreliable and "personal" in self._domains:
+            # Try the LLM fallback first if enabled — it can disambiguate
+            # better than a hard default.
+            if confidence < self.confidence_threshold and self.use_fallback:
+                refined = self._ollama_suggest_domain(text, scores)
+                if refined:
+                    return refined, confidence
+            return "personal", confidence
 
         if confidence < self.confidence_threshold and self.use_fallback:
             refined = self._ollama_suggest_domain(text, scores)

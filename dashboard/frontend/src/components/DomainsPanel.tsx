@@ -1,17 +1,7 @@
 import { useEffect, useState } from "react"
 import { api, type Domain } from "@/lib/api"
 import { HudPanel, StatusDot } from "@/components/hud"
-
-const DOMAIN_COLORS: Record<string, string> = {
-  programming: "#00ff88",
-  work:        "#00e5ff",
-  learning:    "#aaff00",
-  personal:    "#00cc66",
-  health:      "#0099bb",
-  engineering: "#66cc00",
-  finance:     "#00ff66",
-  social:      "#33ffaa",
-}
+import { domainColor } from "@/lib/domainColors"
 
 export function DomainsPanel() {
   const [domains, setDomains] = useState<Domain[]>([])
@@ -46,13 +36,19 @@ export function DomainsPanel() {
         <div className="text-[10px] text-neutral-600 italic">no domains yet</div>
       ) : (
         <div className="space-y-2.5">
-          {top.map((d) => {
-            const color = DOMAIN_COLORS[d.name] ?? "#00c4bc"
+          {top.map((d, idx) => {
+            const color = domainColor(d.name, idx)
             const pct = (d.total / maxCount) * 100
             return (
               <div key={d.name}>
                 <div className="flex items-center justify-between text-[10px] mb-1">
-                  <span className="text-neutral-200 capitalize">{d.name}</span>
+                  <span className="flex items-center gap-1.5 text-neutral-200 capitalize">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full shrink-0"
+                      style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+                    />
+                    {d.name}
+                  </span>
                   <span className="text-neutral-500 tabular-nums font-mono">{d.total}</span>
                 </div>
                 <div className="h-[3px] bg-white/5 rounded-full overflow-hidden">

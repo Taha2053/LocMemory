@@ -30,21 +30,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import gsap from "gsap"
 import { api } from "@/lib/api"
-
-// Bioluminescent tier palette — emerald / cyan / lime / white-green
-const TIER_PALETTE = [
-  new Color(0x00ff88), // Core Context — deep emerald green
-  new Color(0x00e5ff), // Anchor Memories — teal-cyan
-  new Color(0xaaff00), // Leaf Memories — soft lime
-  new Color(0xffffff), // Procedural — bright green-white
-]
-
-const TIER_HALO_PALETTE = [
-  new Color(0x00cc66), // Core Context halo
-  new Color(0x0099bb), // Anchor halo
-  new Color(0x66cc00), // Leaf halo
-  new Color(0x00ff66), // Procedural halo
-]
+import { domainColor } from "@/lib/domainColors"
 
 function createGlowTexture(): CanvasTexture {
   const size = 128
@@ -53,13 +39,11 @@ function createGlowTexture(): CanvasTexture {
   canvas.height = size
   const ctx = canvas.getContext("2d")!
   const half = size / 2
-  // Layered radial gradient: bright core → soft mid → feathered nebula fade
   const gradient = ctx.createRadialGradient(half, half, 0, half, half, half)
-  gradient.addColorStop(0.00, "rgba(255,255,255,1.0)")
-  gradient.addColorStop(0.12, "rgba(255,255,255,0.92)")
-  gradient.addColorStop(0.30, "rgba(255,255,255,0.55)")
-  gradient.addColorStop(0.55, "rgba(255,255,255,0.18)")
-  gradient.addColorStop(0.78, "rgba(255,255,255,0.05)")
+  gradient.addColorStop(0.00, "rgba(255,255,255,1.00)")
+  gradient.addColorStop(0.25, "rgba(255,255,255,0.95)")
+  gradient.addColorStop(0.45, "rgba(255,255,255,0.45)")
+  gradient.addColorStop(0.70, "rgba(255,255,255,0.10)")
   gradient.addColorStop(1.00, "rgba(255,255,255,0.00)")
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, size, size)
@@ -75,7 +59,7 @@ function hashId(str: string): number {
 }
 
 // Base scale in world units — using unit PlaneGeometry(1,1)
-const MARKER_BASE_SCALE = 0.045
+const MARKER_BASE_SCALE = 0.07
 const ZOOM_DISTANCE = 0.35
 // Pull every node this fraction of the way from the surface vertex toward the
 // brain centroid, guaranteeing the marker + its halo stay inside the wireframe.
@@ -182,6 +166,7 @@ export function BrainScene({
     let brainHullOuter: Mesh | null = null
     let brainDots: Points | null = null
     let stars: Points | null = null
+    let nebula: Points | null = null
     // Stencil clipping group for nodes/edges
     let clipGroup: Object3D | null = null
 
@@ -200,7 +185,9 @@ export function BrainScene({
     const nodeIndexById = new Map<string, number>()
     const nodePositions: Vector3[] = []
     const nodeTiers: number[] = []
-    // Per-node base scale — hover/selection overrides MARKER_BASE_SCALE
+    // Per-node domain colors for stroke
+    const nodeCoreColors: Color[] = []
+    // Per-node base scale (not used in flat design)
     const baseScales: number[] = []
     let hoveredIdx = -1
     let prevHoveredIdx = -1
@@ -212,24 +199,20 @@ export function BrainScene({
       const newIdx = id ? nodeIndexById.get(id) ?? -1 : -1
 
       if (markersMesh) {
-        // Reset previous selection
+        // Reset previous selection — restore the node's domain color.
         if (prevSelectedIdx >= 0 && prevSelectedIdx !== newIdx) {
           baseScales[prevSelectedIdx] = MARKER_BASE_SCALE
-          const tIdx = Math.max(0, Math.min(3, nodeTiers[prevSelectedIdx] - 1))
-          markersMesh.setColorAt(prevSelectedIdx, TIER_PALETTE[tIdx])
-          if (haloMesh?.instanceColor) haloMesh.setColorAt(prevSelectedIdx, TIER_HALO_PALETTE[tIdx])
-          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(prevSelectedIdx, TIER_HALO_PALETTE[tIdx])
+          markersMesh.setColorAt(prevSelectedIdx, nodeCoreColors[prevSelectedIdx])
+          if (haloMesh?.instanceColor) haloMesh.setColorAt(prevSelectedIdx, nodeCoreColors[prevSelectedIdx])
+          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(prevSelectedIdx, nodeCoreColors[prevSelectedIdx])
         }
 
-        // Apply new selection — brighter core, larger scale
+        // Apply new selection — brighter core, larger scale.
         if (newIdx >= 0) {
-          const tIdx = Math.max(0, Math.min(3, nodeTiers[newIdx] - 1))
-          markersMesh.setColorAt(
-            newIdx,
-            TIER_PALETTE[tIdx].clone().lerp(new Color(0xffffff), 0.5),
-          )
-          if (haloMesh?.instanceColor) haloMesh.setColorAt(newIdx, TIER_PALETTE[tIdx])
-          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(newIdx, TIER_PALETTE[tIdx])
+          const selCol = nodeCoreColors[newIdx].clone().lerp(new Color(0xffffff), 0.5)
+          markersMesh.setColorAt(newIdx, selCol)
+          if (haloMesh?.instanceColor) haloMesh.setColorAt(newIdx, nodeCoreColors[newIdx])
+          if (bloomMesh?.instanceColor) bloomMesh.setColorAt(newIdx, nodeCoreColors[newIdx])
           baseScales[newIdx] = MARKER_BASE_SCALE * 1.35
         }
 
@@ -358,8 +341,18 @@ export function BrainScene({
       if (brainHullInner) brainHullInner.rotation.y += 0.0008
       if (brainHullOuter) brainHullOuter.rotation.y += 0.0008
       if (stars) {
-        stars.rotation.y -= 0.0002
-        stars.rotation.x += 0.0001
+        stars.rotation.y -= 0.00015
+        stars.rotation.x += 0.00008
+        // Twinkling effect
+        const twinkle = 0.5 + 0.5 * Math.sin((Date.now() / 800) * Math.PI * 2)
+        ;(stars.material as PointsMaterial).opacity = 0.5 + twinkle * 0.4
+      }
+      // Nebula slow rotation
+      if (nebula) {
+        nebula.rotation.y -= 0.00005
+        nebula.rotation.z += 0.00003
+        const nebulaPulse = 0.3 + 0.15 * Math.sin((Date.now() / 3000) * Math.PI * 2)
+        ;(nebula.material as PointsMaterial).opacity = nebulaPulse
       }
 
       // Slow atmospheric breath on the outer halo (~5s cycle)
@@ -399,14 +392,14 @@ export function BrainScene({
 
           // Mid soft halo (2.5× larger)
           if (haloMesh) {
-            tmpObj.scale.setScalar(s * 2.5)
+            tmpObj.scale.setScalar(s * 1.6)
             tmpObj.updateMatrix()
             haloMesh.setMatrixAt(i, tmpObj.matrix)
           }
 
           // Outer feathered bloom (6× larger)
           if (bloomMesh) {
-            tmpObj.scale.setScalar(s * 4.2)
+            tmpObj.scale.setScalar(s * 2.4)
             tmpObj.updateMatrix()
             bloomMesh.setMatrixAt(i, tmpObj.matrix)
           }
@@ -487,30 +480,77 @@ export function BrainScene({
       brainDots = new Points(dotsGeo, dotsMat)
       scene.add(brainDots)
 
-      // ── Star field background ──
+      // ── Enhanced star field background ──
       const starVerts: number[] = []
-      for (let i = 0; i < 350; i++) {
+      const starColors: number[] = []
+      for (let i = 0; i < 800; i++) {
         const theta = Math.random() * Math.PI * 2
         const phi = Math.acos(2 * Math.random() - 1)
-        const r = 5 + Math.random() * 4
+        const r = 4 + Math.random() * 5
         starVerts.push(
           r * Math.sin(phi) * Math.cos(theta),
           r * Math.sin(phi) * Math.sin(theta),
           r * Math.cos(phi),
         )
+        // Mix of emerald, cyan, white stars
+        const colorChoice = Math.random()
+        if (colorChoice < 0.4) {
+          starColors.push(0, 1, 0.53) // emerald
+        } else if (colorChoice < 0.7) {
+          starColors.push(0, 0.9, 1) // cyan
+        } else {
+          starColors.push(1, 1, 1) // white
+        }
       }
       const starGeo = new BufferGeometry()
       starGeo.setAttribute("position", new Float32BufferAttribute(starVerts, 3))
+      starGeo.setAttribute("color", new Float32BufferAttribute(starColors, 3))
       const starMat = new PointsMaterial({
-        color: 0xffffff,
-        size: 0.02,
+        size: 0.035,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.7,
+        vertexColors: true,
         depthWrite: false,
         sizeAttenuation: true,
       })
       stars = new Points(starGeo, starMat)
       scene.add(stars)
+
+      // ── Nebula cloud background ──
+      const nebulaVerts: number[] = []
+      const nebulaColors: number[] = []
+      for (let i = 0; i < 200; i++) {
+        const theta = Math.random() * Math.PI * 2
+        const phi = Math.acos(2 * Math.random() - 1)
+        const r = 6 + Math.random() * 3
+        nebulaVerts.push(
+          r * Math.sin(phi) * Math.cos(theta),
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi),
+        )
+        const colorChoice = Math.random()
+        if (colorChoice < 0.4) {
+          nebulaColors.push(0, 0.3, 0.2, 0.08)
+        } else if (colorChoice < 0.7) {
+          nebulaColors.push(0, 0.2, 0.3, 0.06)
+        } else {
+          nebulaColors.push(0.1, 0.05, 0.15, 0.05)
+        }
+      }
+      const nebulaGeo = new BufferGeometry()
+      nebulaGeo.setAttribute("position", new Float32BufferAttribute(nebulaVerts, 3))
+      nebulaGeo.setAttribute("color", new Float32BufferAttribute(nebulaColors, 4))
+      const nebulaMat = new PointsMaterial({
+        size: 0.8,
+        transparent: true,
+        opacity: 0.4,
+        vertexColors: true,
+        depthWrite: false,
+        sizeAttenuation: true,
+        blending: AdditiveBlending,
+      })
+      nebula = new Points(nebulaGeo, nebulaMat)
+      scene.add(nebula)
 
       // ── Load real memories overlaid on the brain ──
       api
@@ -545,53 +585,101 @@ export function BrainScene({
           const sorted = Array.from(dists).sort((a, b) => a - b)
           const safeRadius = sorted[Math.floor(sorted.length * 0.70)]
 
+          // ── Domain anchors ──────────────────────────────────────────────
+          // Each domain gets a stable position inside the brain ("functional
+          // region"), and all nodes of that domain cluster around it. This
+          // gives the graph a brain-region feel — programming over here,
+          // health over there — instead of nodes scattered randomly.
+          //
+          // Anchor direction = unit vector deterministically derived from
+          // the domain name (Fibonacci-sphere style mapping over the hash),
+          // then placed at 0.55 × safeRadius from centroid so anchors sit in
+          // the cortex region with spacing between them.
+
+          const uniqueDomains = Array.from(new Set(nodes.map((n) => n.domain || "unknown")))
+          const domainAnchors = new Map<string, Vector3>()
+          uniqueDomains.forEach((d) => {
+            const h = hashId(d)
+            // Map hash → spherical coords. Use top-half + low-half bits so
+            // theta and phi are independent.
+            const u = ((h & 0xffff) / 0xffff)            // 0..1
+            const v = (((h >>> 16) & 0xffff) / 0xffff)   // 0..1
+            const theta = u * Math.PI * 2                 // azimuth
+            const phi = Math.acos(2 * v - 1)              // inclination (uniform on sphere)
+            const dir = new Vector3(
+              Math.sin(phi) * Math.cos(theta),
+              Math.cos(phi),
+              Math.sin(phi) * Math.sin(theta),
+            )
+            const anchor = brainCenter.clone().add(dir.multiplyScalar(safeRadius * 0.55))
+            domainAnchors.set(d, anchor)
+          })
+
+          // Cluster radius = how tightly nodes pack around their domain anchor.
+          // 22% of safeRadius gives visible clustering with enough internal
+          // spread that individual nodes don't all overlap.
+          const CLUSTER_RADIUS = safeRadius * 0.22
+          const HARD_BOUND = safeRadius * 0.85
+
           nodeIds = nodes.map((n) => n.id)
           nodes.forEach((n, i) => {
             nodeIndexById.set(n.id, i)
             nodeTiers.push(n.tier)
             baseScales.push(MARKER_BASE_SCALE)
-            const vIdx = hashId(n.id) % positionCount
-            const rawPos = new Vector3(
-              positionsArr[vIdx * 3],
-              positionsArr[vIdx * 3 + 1],
-              positionsArr[vIdx * 3 + 2],
-            )
 
-            // Step 1 — clamp to the safe cortex shell along the outward dir.
-            const offset = rawPos.clone().sub(brainCenter)
+            const anchor = domainAnchors.get(n.domain || "unknown")!
+            const h = hashId(n.id)
+
+            // Deterministic offset within the cluster ball — uniform-ish
+            // distribution by combining three independent hash bytes.
+            const j1 = ((h >>> 3) & 0xff) / 255 - 0.5
+            const j2 = ((h >>> 11) & 0xff) / 255 - 0.5
+            const j3 = ((h >>> 19) & 0xff) / 255 - 0.5
+            // Slight radial bias toward center of cluster for tighter grouping.
+            const r = ((h >>> 27) & 0x1f) / 31  // 0..1
+            const radial = Math.cbrt(r)         // cube-root → ball-uniform
+            const len = Math.hypot(j1, j2, j3) || 1
+            const pos = anchor.clone()
+            pos.x += (j1 / len) * radial * CLUSTER_RADIUS
+            pos.y += (j2 / len) * radial * CLUSTER_RADIUS
+            pos.z += (j3 / len) * radial * CLUSTER_RADIUS
+
+            // Hard clamp to the cortex shell so jittered anchors never escape.
+            const offset = pos.clone().sub(brainCenter)
             const d = offset.length()
-            if (d > safeRadius) {
-              offset.multiplyScalar(safeRadius / d)
+            if (d > HARD_BOUND) {
+              offset.multiplyScalar(HARD_BOUND / d)
+              pos.copy(brainCenter).add(offset)
             }
-            const onShell = brainCenter.clone().add(offset)
 
-            // Step 2 — pull inward from the shell toward centroid so the 4.2×
-            // bloom halo stays inside the wireframe.
-            nodePositions.push(pullInside(onShell, brainCenter))
+            nodePositions.push(pos)
           })
 
           // Shared unit plane — actual world size set via scale in animate loop
           const planeGeom = new PlaneGeometry(1, 1)
 
-          // ── Layer 1: Inner bright core glow (hit-tested for raycasting) ──
+          // ── Layer 1: Solid colored disc (NormalBlending = no stacking) ──
+          // Switching from Additive to Normal kills the central white-supernova
+          // when many nodes overlap — each disc paints its domain color cleanly
+          // instead of summing toward saturation.
           const coreMat = new MeshBasicMaterial({
             map: glowTex,
             color: 0xffffff,
             transparent: true,
-            opacity: 1.0,
-            blending: AdditiveBlending,
+            opacity: 0.95,
+            blending: NormalBlending,
             depthWrite: false,
             toneMapped: false,
           })
           markersMesh = new InstancedMesh(planeGeom, coreMat, nodes.length)
           markersMesh.renderOrder = 3
 
-          // ── Layer 2: Mid soft halo ──
+          // ── Layer 2: Mid soft halo (additive but very low opacity) ──
           const haloMat = new MeshBasicMaterial({
             map: glowTex,
             color: 0xffffff,
             transparent: true,
-            opacity: 0.55,
+            opacity: 0.10,
             blending: AdditiveBlending,
             depthWrite: false,
             toneMapped: false,
@@ -599,12 +687,12 @@ export function BrainScene({
           haloMesh = new InstancedMesh(planeGeom, haloMat, nodes.length)
           haloMesh.renderOrder = 2
 
-          // ── Layer 3: Outer feathered bloom ──
+          // ── Layer 3: Outer feathered bloom (barely there) ──
           const bloomMat = new MeshBasicMaterial({
             map: glowTex,
             color: 0xffffff,
             transparent: true,
-            opacity: 0.22,
+            opacity: 0.04,
             blending: AdditiveBlending,
             depthWrite: false,
             toneMapped: false,
@@ -612,22 +700,23 @@ export function BrainScene({
           bloomMesh = new InstancedMesh(planeGeom, bloomMat, nodes.length)
           bloomMesh.renderOrder = 1
 
-          // Bootstrap per-instance colors and initial matrices
+          // Bootstrap per-instance colors (by domain) and initial matrices
           for (let i = 0; i < nodes.length; i++) {
-            const tierIdx = Math.max(0, Math.min(3, nodes[i].tier - 1))
-            markersMesh.setColorAt(i, TIER_PALETTE[tierIdx])
-            haloMesh.setColorAt(i, TIER_HALO_PALETTE[tierIdx])
-            bloomMesh.setColorAt(i, TIER_HALO_PALETTE[tierIdx])
+            const core = new Color(domainColor(nodes[i].domain))
+            nodeCoreColors.push(core)
+            markersMesh.setColorAt(i, core)
+            haloMesh.setColorAt(i, core)
+            bloomMesh.setColorAt(i, core)
 
             // Initial matrix (billboard orientation set correctly on first animate frame)
             tmpObj.position.copy(nodePositions[i])
             tmpObj.scale.setScalar(MARKER_BASE_SCALE)
             tmpObj.updateMatrix()
             markersMesh.setMatrixAt(i, tmpObj.matrix)
-            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 2.5)
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 1.6)
             tmpObj.updateMatrix()
             haloMesh.setMatrixAt(i, tmpObj.matrix)
-            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 4.2)
+            tmpObj.scale.setScalar(MARKER_BASE_SCALE * 2.4)
             tmpObj.updateMatrix()
             bloomMesh.setMatrixAt(i, tmpObj.matrix)
           }
@@ -639,13 +728,13 @@ export function BrainScene({
           if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true
           if (bloomMesh.instanceColor) bloomMesh.instanceColor.needsUpdate = true
 
-          // Create clip group for nodes/edges (scaled inward via INWARD_SCALE)
+          // Create clip group for nodes/edges
           clipGroup = new Object3D()
           scene.add(clipGroup)
 
           // Add bloom first (back), then halo, then core (front) to clip group
-          clipGroup.add(bloomMesh)
-          clipGroup.add(haloMesh)
+          if (bloomMesh) clipGroup.add(bloomMesh)
+          if (haloMesh) clipGroup.add(haloMesh)
           clipGroup.add(markersMesh)
 
           if (selectedRef.current) applySelection(selectedRef.current)
@@ -663,8 +752,8 @@ export function BrainScene({
               const sp = nodePositions[si]
               const tp = nodePositions[ti]
               verts.push(sp.x, sp.y, sp.z, tp.x, tp.y, tp.z)
-              const sc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[si].tier - 1))]
-              const tc = TIER_PALETTE[Math.max(0, Math.min(3, nodes[ti].tier - 1))]
+              const sc = nodeCoreColors[si]
+              const tc = nodeCoreColors[ti]
               const a = MathUtils.clamp(l.weight ?? 0.3, 0.1, 0.6)
               cols.push(sc.r * a, sc.g * a, sc.b * a, tc.r * a, tc.g * a, tc.b * a)
             }
@@ -675,11 +764,11 @@ export function BrainScene({
               const em = new LineBasicMaterial({
                 vertexColors: true,
                 transparent: true,
-                opacity: 0.5,
+                opacity: 0.3,
                 depthWrite: false,
               })
               edgesLine = new LineSegments(eg, em)
-              edgesLine.renderOrder = 1
+              edgesLine.renderOrder = 0
               clipGroup.add(edgesLine)
             }
           }
@@ -721,6 +810,21 @@ export function BrainScene({
         brainDots.geometry.dispose()
         ;(brainDots.material as PointsMaterial).dispose()
         scene.remove(brainDots)
+      }
+      if (stars) {
+        stars.geometry.dispose()
+        ;(stars.material as PointsMaterial).dispose()
+        scene.remove(stars)
+      }
+      if (nebula) {
+        nebula.geometry.dispose()
+        ;(nebula.material as PointsMaterial).dispose()
+        scene.remove(nebula)
+      }
+      if (stars) {
+        stars.geometry.dispose()
+        ;(stars.material as PointsMaterial).dispose()
+        scene.remove(stars)
       }
       if (markersMesh) {
         markersMesh.geometry.dispose()

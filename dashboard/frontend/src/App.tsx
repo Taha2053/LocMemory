@@ -11,6 +11,7 @@ import { SettingsPage } from "@/pages/settings"
 import { MetricsPage } from "@/pages/metrics"
 import { GuidePage } from "@/pages/guide"
 import { ChatPage } from "@/pages/chat"
+import { AboutPage } from "@/pages/about"
 import { MatrixIntro } from "@/components/MatrixIntro"
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/metrics" element={<MetricsPage />} />
               <Route path="/guide" element={<GuidePage />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/about" element={<AboutPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
