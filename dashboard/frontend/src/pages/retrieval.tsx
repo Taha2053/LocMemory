@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { api, type RetrievedResult, type RetrieveResponse } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
+import { useTheme } from "@/context/ThemeContext"
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const TIER_COLORS: Record<number, string> = {
@@ -560,6 +561,7 @@ export function RetrievalPage() {
   const [includeRejected, setIncludeRejected] = useState(false)
   const [queryHistory, setQueryHistory]     = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const { colors } = useTheme()
 
   const isLoading = loading || compareLoading
 
@@ -633,13 +635,13 @@ export function RetrievalPage() {
         {/* ── Header ── */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Memory Retrieval</span>
+            <div className="h-px w-8" style={{ background: colors.primaryBorder }} />
+            <span className="text-[9px] uppercase tracking-[0.3em]" style={{ color: colors.primaryTextDim }}>Memory Retrieval</span>
           </div>
           <div className="flex items-end gap-4">
             <h1
-              className="text-xl font-bold tracking-wide text-emerald-300"
-              style={{ textShadow: "0 0 20px rgba(0,255,136,0.4)" }}
+              className="text-xl font-bold tracking-wide"
+              style={{ color: colors.primaryText, textShadow: `0 0 20px ${colors.primaryGlow}` }}
             >
               Query Engine
             </h1>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTheme } from "@/context/ThemeContext"
 
 /* ─── Neural constellation background ─── */
 function ConstellationCanvas() {
@@ -266,6 +267,7 @@ export function AboutPage() {
     "Know how to solve every problem that has been solved.",
   ]
   const { displayed, done } = useTypewriter(lines, 1200, 36)
+  const { colors } = useTheme()
 
   return (
     <div
@@ -331,17 +333,17 @@ export function AboutPage() {
           <div
             className="flex items-center gap-2 px-5 py-1.5"
             style={{
-              border: "1px solid rgba(0,196,188,0.2)",
-              boxShadow: "0 0 20px rgba(0,196,188,0.06)",
-              background: "rgba(0,196,188,0.04)",
+              border: `1px solid ${colors.primaryBorder}`,
+              boxShadow: `0 0 20px ${colors.primaryDim}`,
+              background: colors.primaryDim,
             }}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 6px rgba(74,222,128,0.9)", animation: "pulse 2s ease-in-out infinite" }} />
-            <span className="text-[9px] uppercase tracking-[0.45em]" style={{ color: "rgba(0,196,188,0.7)" }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: colors.primary, boxShadow: `0 0 6px ${colors.primaryGlow}`, animation: "pulse 2s ease-in-out infinite" }} />
+            <span className="text-[9px] uppercase tracking-[0.45em]" style={{ color: colors.primaryText }}>
               LocMemory &nbsp;·&nbsp; v0.1.0
             </span>
           </div>
-          <span className="text-[8px] uppercase tracking-[0.35em]" style={{ color: "rgba(0,196,188,0.3)" }}>
+          <span className="text-[8px] uppercase tracking-[0.35em]" style={{ color: colors.primaryTextDim }}>
             local intelligence · built by humans
           </span>
         </div>
@@ -353,13 +355,13 @@ export function AboutPage() {
         >
           {/* Divider with label */}
           <div className="w-full flex items-center gap-5 mb-12">
-            <div className="flex-1 h-px" style={{ background: "linear-gradient(to right, transparent, rgba(0,196,188,0.35))" }} />
+            <div className="flex-1 h-px" style={{ background: `linear-gradient(to right, transparent, ${colors.primaryBorder})` }} />
             <div className="flex items-center gap-2">
-              <div className="h-px w-3" style={{ background: "rgba(0,196,188,0.5)" }} />
-              <span className="text-[8px] uppercase tracking-[0.45em]" style={{ color: "rgba(0,196,188,0.55)" }}>dedication</span>
-              <div className="h-px w-3" style={{ background: "rgba(0,196,188,0.5)" }} />
+              <div className="h-px w-3" style={{ background: colors.primary }} />
+              <span className="text-[8px] uppercase tracking-[0.45em]" style={{ color: colors.primaryText }}>dedication</span>
+              <div className="h-px w-3" style={{ background: colors.primary }} />
             </div>
-            <div className="flex-1 h-px" style={{ background: "linear-gradient(to left, transparent, rgba(0,196,188,0.35))" }} />
+            <div className="flex-1 h-px" style={{ background: `linear-gradient(to left, transparent, ${colors.primaryBorder})` }} />
           </div>
 
           {/* Quote */}

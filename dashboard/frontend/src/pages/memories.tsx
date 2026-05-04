@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { api, type Memory, type MemoryDetail, type Domain } from "@/lib/api"
 import { ChevronDown, ChevronRight, X, Plus, Pencil, Trash2, Copy, Check, ArrowUpDown } from "lucide-react"
 import { ScanlineOverlay } from "@/components/hud"
+import { useTheme } from "@/context/ThemeContext"
 
 const TIER_COLORS = ["#00ff88", "#00e5ff", "#aaff00", "#00ff66"] as const
 const TIER_LABELS = [
@@ -417,6 +418,7 @@ export function MemoriesPage() {
   const [activeTier, setActiveTier]         = useState<number | null>(null)
   const [sort, setSort]                     = useState("newest")
   const [page, setPage]                     = useState(0)
+  const { colors } = useTheme()
   const [hasMore, setHasMore]               = useState(true)
   const [showAddModal, setShowAddModal]     = useState(false)
   const [selected, setSelected]             = useState<Set<string>>(new Set())
@@ -605,10 +607,11 @@ export function MemoriesPage() {
         </div>
 
         {(activeDomain || activeSubdomain) && (
-          <div className="px-3 py-2.5" style={{ borderTop: "1px solid rgba(0,255,136,0.08)" }}>
+          <div className="px-3 py-2.5" style={{ borderTop: `1px solid ${colors.primaryBorder}` }}>
             <button
               onClick={() => { setActiveDomain(null); setActiveSubdomain(null) }}
-              className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-neutral-600 hover:text-emerald-400 transition-colors"
+              className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest transition-colors"
+              style={{ color: colors.primaryTextDim }}
             >
               <X className="w-3 h-3" /> clear filter
             </button>
@@ -622,17 +625,17 @@ export function MemoriesPage() {
         {/* Top bar: search + add button */}
         <div className="flex items-center gap-3 mb-3">
           <div className="relative flex-1">
-            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-400/40"
-              style={{ boxShadow: "0 0 6px rgba(0,255,136,0.4)" }} />
+            <div className="absolute left-0 top-0 bottom-0 w-0.5"
+              style={{ background: colors.primaryBorder, boxShadow: `0 0 6px ${colors.primaryGlow}` }} />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={typewriterText || TYPEWRITER_TEXT}
               className="w-full bg-transparent py-2.5 pl-4 pr-4 text-[12px] text-neutral-100 placeholder:text-neutral-700 focus:outline-none"
-              style={{ borderBottom: "1px solid rgba(0,255,136,0.2)" }}
-              onFocus={(e) => (e.target.style.borderBottomColor = "rgba(0,255,136,0.5)")}
-              onBlur={(e) => (e.target.style.borderBottomColor = "rgba(0,255,136,0.2)")}
+              style={{ borderBottom: `1px solid ${colors.primaryBorder}` }}
+              onFocus={(e) => (e.target.style.borderBottomColor = colors.primary)}
+              onBlur={(e) => (e.target.style.borderBottomColor = colors.primaryBorder)}
             />
           </div>
 
@@ -640,7 +643,7 @@ export function MemoriesPage() {
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-[10px] uppercase tracking-wider transition-all hover:bg-emerald-400/10"
-            style={{ border: "1px solid rgba(0,255,136,0.3)", color: "#00ff88" }}
+            style={{ border: `1px solid ${colors.primaryBorder}`, color: colors.primaryText }}
           >
             <Plus className="w-3.5 h-3.5" />
             Add

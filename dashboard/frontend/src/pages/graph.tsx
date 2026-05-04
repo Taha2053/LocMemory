@@ -13,6 +13,7 @@ import { MemoryInspector } from "@/components/MemoryInspector"
 import { HebbianPanel } from "@/components/HebbianPanel"
 import { PatternsPanel } from "@/components/PatternsPanel"
 import { DomainsPanel } from "@/components/DomainsPanel"
+import { useTheme } from "@/context/ThemeContext"
 
 interface RLStatus {
   enabled: boolean
@@ -46,6 +47,7 @@ export function GraphPage() {
   const [rlStatus, setRlStatus] = useState<RLStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [uptime, setUptime] = useState(0)
+  const { colors } = useTheme()
 
   useEffect(() => {
     api.stats()
@@ -129,26 +131,26 @@ export function GraphPage() {
           className="col-span-2 flex items-center justify-center gap-3 py-2 px-4"
           style={{
             background: "rgba(0,20,15,0.85)",
-            border: "1px solid rgba(0,255,180,0.15)",
+            border: `1px solid ${colors.primaryBorder}`,
             borderRadius: "8px",
           }}
         >
-          <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-500/60 flex items-center gap-3">
+          <div className="text-[10px] uppercase tracking-[0.25em] flex items-center gap-3" style={{ color: colors.primaryTextDim }}>
             <span className="flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
               SYS
             </span>
-            <span className="text-emerald-500/30">●</span>
+            <span style={{ color: colors.primaryDim }}>●</span>
             <span>NODES: {loading ? "…" : totalNodes}</span>
-            <span className="text-emerald-500/30">●</span>
+            <span style={{ color: colors.primaryDim }}>●</span>
             <span>EDGES: {loading ? "…" : totalEdges}</span>
-            <span className="text-emerald-500/30">●</span>
+            <span style={{ color: colors.primaryDim }}>●</span>
             <span>UPTIME: {formatUptime(uptime)}</span>
-            <span className="text-emerald-500/30">●</span>
+            <span style={{ color: colors.primaryDim }}>●</span>
             <span className={rlStatus?.available ? "text-purple-400" : "text-neutral-600"}>
               RL: {rlStatus?.available ? "ACTIVE" : rlStatus?.enabled ? "LOADING" : "OFF"}
             </span>
-            <span className="text-emerald-500/30">●</span>
+            <span style={{ color: colors.primaryDim }}>●</span>
             <span>STATUS: NOMINAL</span>
           </div>
         </div>

@@ -37,7 +37,7 @@ function FooterBar() {
           SYS:LOCMEMORY
         </span>
         <span className="text-[8px]" style={{ color: "rgba(0,196,188,0.15)" }}>·</span>
-        <span className="text-[8px] uppercase tracking-[0.22em]" style={{ color: "rgba(0,196,188,0.22)" }}>
+        <span className="text-[8px] uppercase tracking-[0.22em]" style={{ color: colors.primaryTextDim }}>
           BUILD 2025.04
         </span>
       </div>
@@ -45,20 +45,20 @@ function FooterBar() {
       {/* Center — creators credit */}
       <NavLink
         to="/about"
-        className="flex items-center gap-1.5 group"
+        className="flex items-center gap-2 group"
         style={{ textDecoration: "none" }}
       >
-        <span className="text-[8px] tracking-[0.2em]" style={{ color: "rgba(0,196,188,0.18)" }}>crafted by</span>
+        <span className="text-[9px] tracking-[0.15em]" style={{ color: colors.primaryTextDim }}>crafted by</span>
         <span
-          className="text-[8px] uppercase tracking-[0.22em] transition-all duration-300"
-          style={{ color: "rgba(0,196,188,0.45)" }}
+          className="text-[9px] uppercase tracking-[0.18em] font-semibold transition-all duration-300 group-hover:brightness-150"
+          style={{ color: colors.primaryText }}
         >
-          Taha Khalfallah
+          Almouthana Taha Khalfallah
         </span>
-        <span className="text-[8px]" style={{ color: "rgba(0,196,188,0.18)" }}>&amp;</span>
+        <span className="text-[9px] font-bold" style={{ color: colors.primaryTextDim }}>&amp;</span>
         <span
-          className="text-[8px] uppercase tracking-[0.22em] transition-all duration-300"
-          style={{ color: "rgba(179,136,255,0.45)" }}
+          className="text-[9px] uppercase tracking-[0.18em] font-semibold transition-all duration-300 group-hover:brightness-150"
+          style={{ color: "rgba(179,136,255,0.75)" }}
         >
           Eya Dhrif
         </span>
@@ -68,11 +68,11 @@ function FooterBar() {
       <div className="flex items-center gap-1.5">
         <span
           className="text-[8px] tabular-nums tracking-[0.15em]"
-          style={{ color: "rgba(0,196,188,0.3)", fontVariantNumeric: "tabular-nums" }}
+          style={{ color: colors.primaryTextDim, fontVariantNumeric: "tabular-nums" }}
         >
           {hh}:{mm}:{ss}
         </span>
-        <div className="h-1 w-1 rounded-full" style={{ background: "rgba(0,196,188,0.2)" }} />
+        <div className="h-1 w-1 rounded-full" style={{ background: colors.primaryBorder }} />
       </div>
 
       <style>{`
@@ -88,6 +88,7 @@ function FooterBar() {
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { colors } = useTheme()
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -95,12 +96,12 @@ export function Layout() {
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="fixed top-3 left-3 z-50 lg:hidden p-2 rounded-md"
-        style={{ background: "rgba(0,5,16,0.9)", border: "1px solid rgba(0,196,188,0.3)" }}
+        style={{ background: "rgba(0,5,16,0.9)", border: `1px solid ${colors.primaryBorder}` }}
       >
         {sidebarOpen ? (
-          <X className="w-5 h-5 text-emerald-400" />
+          <X className="w-5 h-5" style={{ color: colors.primaryText }} />
         ) : (
-          <Menu className="w-5 h-5 text-emerald-400" />
+          <Menu className="w-5 h-5" style={{ color: colors.primaryText }} />
         )}
       </button>
 

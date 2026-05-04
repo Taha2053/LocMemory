@@ -2,22 +2,24 @@ import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { Save, RotateCcw, CheckCircle, AlertCircle } from "lucide-react"
+import { useTheme } from "@/context/ThemeContext"
 
 // ── helpers ──────────────────────────────────────────────────────
 
 function Section({ title, tag, children }: { title: string; tag: string; children: React.ReactNode }) {
+  const { colors } = useTheme()
   return (
     <div
-      className="rounded-sm border border-emerald-400/10 overflow-hidden"
-      style={{ background: "rgba(0,5,16,0.6)" }}
+      className="rounded-sm overflow-hidden"
+      style={{ border: `1px solid ${colors.primaryBorder}`, background: "rgba(0,5,16,0.6)" }}
     >
       <div
-        className="flex items-center gap-3 px-5 py-3 border-b border-emerald-400/10"
-        style={{ background: "rgba(0, 196, 188,0.04)" }}
+        className="flex items-center gap-3 px-5 py-3"
+        style={{ borderBottom: `1px solid ${colors.primaryBorder}`, background: colors.primaryDim }}
       >
-        <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/50">// {tag}</span>
-        <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.15), transparent)" }} />
-        <span className="text-[11px] uppercase tracking-widest text-emerald-400/80 font-semibold">{title}</span>
+        <span className="text-[8px] uppercase tracking-[0.25em]" style={{ color: colors.primaryTextDim }}>// {tag}</span>
+        <div className="h-px flex-1" style={{ background: `linear-gradient(to right, ${colors.primaryBorder}, transparent)` }} />
+        <span className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: colors.primaryText }}>{title}</span>
       </div>
       <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
         {children}
@@ -27,6 +29,7 @@ function Section({ title, tag, children }: { title: string; tag: string; childre
 }
 
 function Toggle({ label, desc, value, onChange }: { label: string; desc?: string; value: boolean; onChange: (v: boolean) => void }) {
+  const { colors } = useTheme()
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
@@ -37,9 +40,9 @@ function Toggle({ label, desc, value, onChange }: { label: string; desc?: string
         onClick={() => onChange(!value)}
         className="relative shrink-0 h-5 w-9 rounded-full transition-all duration-200"
         style={{
-          background: value ? "rgba(0, 196, 188, 0.35)" : "rgba(255,255,255,0.06)",
-          border: value ? "1px solid rgba(0, 196, 188,0.6)" : "1px solid rgba(255,255,255,0.1)",
-          boxShadow: value ? "0 0 8px rgba(0, 196, 188,0.3)" : "none",
+          background: value ? colors.primaryDim : "rgba(255,255,255,0.06)",
+          border: value ? `1px solid ${colors.primaryGlow}` : "1px solid rgba(255,255,255,0.1)",
+          boxShadow: value ? `0 0 8px ${colors.primaryDim}` : "none",
         }}
       >
         <span
@@ -120,6 +123,7 @@ export function SettingsPage() {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
   const [isDirty, setIsDirty] = useState(false)
+  const { colors } = useTheme()
 
   useEffect(() => {
     api.config().then(c => {
@@ -174,24 +178,24 @@ export function SettingsPage() {
 
       {/* Ambient */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(0, 196, 188,0.06), transparent 40%)" }} />
+        style={{ background: `radial-gradient(ellipse at 0% 0%, ${colors.primaryDim}, transparent 40%)` }} />
 
       {/* Corner brackets */}
-      <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2 border-emerald-400/30" />
-      <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-2 border-r-2 border-emerald-400/30" />
-      <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2 border-emerald-400/30" />
-      <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-emerald-400/30" />
+      <div className="pointer-events-none absolute top-3 left-3 h-5 w-5 border-t-2 border-l-2" style={{ borderColor: colors.primaryBorder }} />
+      <div className="pointer-events-none absolute top-3 right-3 h-5 w-5 border-t-2 border-r-2" style={{ borderColor: colors.primaryBorder }} />
+      <div className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2" style={{ borderColor: colors.primaryBorder }} />
+      <div className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2" style={{ borderColor: colors.primaryBorder }} />
 
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-8 space-y-6">
 
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-px w-8 bg-emerald-400/40" />
-            <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/60">Settings</span>
+            <div className="h-px w-8" style={{ background: colors.primaryBorder }} />
+            <span className="text-[9px] uppercase tracking-[0.3em]" style={{ color: colors.primaryTextDim }}>Settings</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-wide text-emerald-300"
-            style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.4)" }}>
+          <h1 className="text-2xl font-bold tracking-wide"
+            style={{ color: colors.primaryText, textShadow: `0 0 20px ${colors.primaryGlow}` }}>
             Settings
           </h1>
           <p className="mt-1 text-[11px] text-neutral-600 uppercase tracking-wider">

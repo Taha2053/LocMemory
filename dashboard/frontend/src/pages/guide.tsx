@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { ScanlineOverlay } from "@/components/hud"
+import { useTheme } from "@/context/ThemeContext"
 
 interface Section {
   id: string
@@ -268,6 +269,7 @@ const SECTIONS: Section[] = [
 
 export function GuidePage() {
   const [activeSection, setActiveSection] = useState<string>("what")
+  const { colors } = useTheme()
 
   const active = SECTIONS.find(s => s.id === activeSection)
 
@@ -276,17 +278,17 @@ export function GuidePage() {
       <ScanlineOverlay />
 
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse at 10% 30%, rgba(0, 196, 188,0.05), transparent 50%)" }} />
+        style={{ background: `radial-gradient(ellipse at 10% 30%, ${colors.primaryDim}, transparent 50%)` }} />
 
       {/* Left nav */}
       <div
         className="relative z-10 w-52 shrink-0 flex flex-col overflow-y-auto custom-scrollbar"
-        style={{ borderRight: "1px solid rgba(0, 196, 188,0.12)", background: "rgba(0,5,16,0.8)" }}
+        style={{ borderRight: `1px solid ${colors.primaryBorder}`, background: "rgba(0,5,16,0.8)" }}
       >
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(0, 196, 188,0.1)" }}>
-          <div className="text-[8px] uppercase tracking-[0.25em] text-emerald-600/50 mb-0.5">// DOC</div>
-          <div className="text-[13px] uppercase tracking-widest text-emerald-300 font-semibold"
-            style={{ textShadow: "0 0 12px rgba(0, 196, 188,0.4)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: `1px solid ${colors.primaryBorder}` }}>
+          <div className="text-[8px] uppercase tracking-[0.25em] mb-0.5" style={{ color: colors.primaryTextDim }}>// DOC</div>
+          <div className="text-[13px] uppercase tracking-widest font-semibold"
+            style={{ color: colors.primaryText, textShadow: `0 0 12px ${colors.primaryGlow}` }}>
             Guide
           </div>
         </div>
@@ -300,25 +302,25 @@ export function GuidePage() {
                 onClick={() => setActiveSection(id)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-sm transition-all duration-150"
                 style={{
-                  background: isActive ? "rgba(0, 196, 188,0.08)" : "transparent",
-                  borderLeft: isActive ? "2px solid #00c4bc" : "2px solid transparent",
-                  boxShadow: isActive ? "0 0 12px rgba(0, 196, 188,0.05)" : "none",
+                  background: isActive ? colors.primaryDim : "transparent",
+                  borderLeft: isActive ? `2px solid ${colors.primary}` : "2px solid transparent",
+                  boxShadow: isActive ? `0 0 12px ${colors.primaryDim}` : "none",
                 }}
               >
                 <span className="text-[8px] tabular-nums text-neutral-700 font-mono w-4">{tag}</span>
-                <span className={`text-[10px] uppercase tracking-wider ${isActive ? "text-emerald-300" : "text-neutral-500 hover:text-neutral-300"}`}>
+                <span className={`text-[10px] uppercase tracking-wider`} style={{ color: isActive ? colors.primaryText : undefined }}>
                   {title}
                 </span>
                 {isActive && (
-                  <span className="ml-auto h-1 w-1 rounded-full bg-emerald-400 shrink-0"
-                    style={{ boxShadow: "0 0 6px rgba(0, 196, 188,0.9)" }} />
+                  <span className="ml-auto h-1 w-1 rounded-full shrink-0"
+                    style={{ background: colors.primary, boxShadow: `0 0 6px ${colors.primaryGlow}` }} />
                 )}
               </button>
             )
           })}
         </nav>
 
-        <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}>
+        <div className="px-4 py-3" style={{ borderTop: `1px solid ${colors.primaryBorder}` }}>
           <div className="text-[8px] text-neutral-700 uppercase tracking-widest">LocMemory v0.1.0</div>
         </div>
       </div>
@@ -329,24 +331,24 @@ export function GuidePage() {
           <div className="max-w-3xl">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-1">
-                <div className="h-px w-6" style={{ background: "rgba(0, 196, 188,0.4)" }} />
-                <span className="text-[9px] uppercase tracking-[0.3em] text-emerald-600/50">
+                <div className="h-px w-6" style={{ background: colors.primaryBorder }} />
+                <span className="text-[9px] uppercase tracking-[0.3em]" style={{ color: colors.primaryTextDim }}>
                   // {active.tag}
                 </span>
               </div>
-              <h2 className="text-[22px] font-bold tracking-wide text-emerald-300"
-                style={{ textShadow: "0 0 20px rgba(0, 196, 188,0.3)" }}>
+              <h2 className="text-[22px] font-bold tracking-wide"
+                style={{ color: colors.primaryText, textShadow: `0 0 20px ${colors.primaryGlow}` }}>
                 {active.title}
               </h2>
             </div>
 
             <div className="mb-6 h-px w-full"
-              style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.2), transparent)" }} />
+              style={{ background: `linear-gradient(to right, ${colors.primaryBorder}, transparent)` }} />
 
             <div>{active.content}</div>
 
             <div className="flex items-center justify-between mt-10 pt-6"
-              style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}>
+              style={{ borderTop: `1px solid ${colors.primaryBorder}` }}>
               {(() => {
                 const idx = SECTIONS.findIndex(s => s.id === activeSection)
                 const prev = SECTIONS[idx - 1]

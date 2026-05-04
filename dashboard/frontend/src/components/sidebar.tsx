@@ -60,7 +60,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       <div
         className="pointer-events-none absolute top-0 left-0 w-full h-32"
         style={{
-          background: "radial-gradient(ellipse at 30% 0%, rgba(0, 196, 188,0.08) 0%, transparent 70%)",
+          background: `radial-gradient(ellipse at 30% 0%, ${colors.primaryDim} 0%, transparent 70%)`,
         }}
       />
 
@@ -83,7 +83,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Logo */}
       <div
         className="relative px-5 pt-6 pb-4"
-        style={{ borderBottom: "1px solid rgba(0, 196, 188,0.12)" }}
+        style={{ borderBottom: `1px solid ${colors.primaryBorder}` }}
       >
         <div className="flex items-center gap-3 mb-3">
           <div className="relative shrink-0 h-14 w-14 flex items-center justify-center">
@@ -105,7 +105,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
             >
               LocMemory
             </div>
-            <div className="text-[8px] text-emerald-700/80 uppercase tracking-[0.25em]">
+            <div className="text-[8px] uppercase tracking-[0.25em]" style={{ color: colors.primaryTextDim }}>
               v0.1.0
             </div>
           </div>
@@ -155,9 +155,9 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Nav */}
       <nav className="px-3 py-4 space-y-1">
         <div className="px-2 mb-3 flex items-center gap-2">
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(0, 196, 188,0.3), transparent)" }} />
-          <span className="text-[8px] uppercase tracking-[0.25em] text-emerald-700/60">NAV</span>
-          <div className="h-px flex-1" style={{ background: "linear-gradient(to left, rgba(0, 196, 188,0.3), transparent)" }} />
+          <div className="h-px flex-1" style={{ background: `linear-gradient(to right, ${colors.primaryBorder}, transparent)` }} />
+          <span className="text-[8px] uppercase tracking-[0.25em]" style={{ color: colors.primaryTextDim }}>NAV</span>
+          <div className="h-px flex-1" style={{ background: `linear-gradient(to left, ${colors.primaryBorder}, transparent)` }} />
         </div>
 
         {links.map(({ to, label, icon: Icon, id, desc }) => (
@@ -169,13 +169,14 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               cn(
                 "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-[11px] uppercase tracking-widest transition-all duration-200 overflow-hidden",
                 isActive
-                  ? "text-emerald-300"
+                  ? ""
                   : "text-neutral-500 hover:text-emerald-100"
               )
             }
             style={({ isActive }) => isActive ? {
-              background: "linear-gradient(90deg, rgba(0, 196, 188,0.12) 0%, rgba(0, 196, 188,0.04) 100%)",
-              boxShadow: "inset 0 0 20px rgba(0, 196, 188,0.05)",
+              background: `linear-gradient(90deg, ${colors.primaryDim} 0%, ${colors.primaryBorder} 100%)`,
+              boxShadow: `inset 0 0 20px ${colors.primaryDim}`,
+              color: colors.primaryText,
             } : {}}
           >
             {({ isActive }) => (
@@ -183,7 +184,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 {/* Hover bg */}
                 {!isActive && (
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    style={{ background: "linear-gradient(90deg, rgba(0, 196, 188,0.07), transparent)" }}
+                    style={{ background: `linear-gradient(90deg, ${colors.primaryDim}, transparent)` }}
                   />
                 )}
 
@@ -191,14 +192,15 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 <div
                   className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all duration-300"
                   style={{
-                    background: isActive ? "linear-gradient(180deg, transparent, #00c4bc, transparent)" : "transparent",
-                    boxShadow: isActive ? "0 0 8px rgba(0, 196, 188,0.8)" : "none",
+                    background: isActive ? `linear-gradient(180deg, transparent, ${colors.primary}, transparent)` : "transparent",
+                    boxShadow: isActive ? `0 0 8px ${colors.primaryGlow}` : "none",
                     opacity: isActive ? 1 : 0,
                   }}
                 />
 
                 {/* ID */}
-                <span className={cn("text-[8px] w-4 tabular-nums shrink-0", isActive ? "text-emerald-500/50" : "text-neutral-700 group-hover:text-neutral-600")}>
+                <span className={cn("text-[8px] w-4 tabular-nums shrink-0", isActive ? "" : "text-neutral-700 group-hover:text-neutral-600")}
+                  style={isActive ? { color: colors.primaryTextDim } : {}}>
                   {id}
                 </span>
 
@@ -206,7 +208,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 <Icon
                   className="w-3.5 h-3.5 shrink-0 transition-all duration-200"
                   style={isActive
-                    ? { filter: "drop-shadow(0 0 5px rgba(0, 196, 188,0.8))", color: "#00c4bc" }
+                    ? { filter: `drop-shadow(0 0 5px ${colors.primaryGlow})`, color: colors.primary }
                     : {}}
                 />
 
@@ -214,7 +216,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 <div className="flex flex-col min-w-0">
                   <span className="leading-none">{label}</span>
                   {isActive && (
-                    <span className="text-[7px] text-emerald-600/60 normal-case tracking-wider mt-0.5 leading-none">
+                    <span className="text-[7px] normal-case tracking-wider mt-0.5 leading-none" style={{ color: colors.primaryTextDim }}>
                       {desc}
                     </span>
                   )}
@@ -223,8 +225,8 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 {/* Active indicator */}
                 {isActive && (
                   <span
-                    className="ml-auto h-1 w-1 rounded-full shrink-0 bg-emerald-400"
-                    style={{ boxShadow: "0 0 6px rgba(0, 196, 188,0.9)", animation: "pulse 2s ease-in-out infinite" }}
+                    className="ml-auto h-1 w-1 rounded-full shrink-0"
+                    style={{ background: colors.primary, boxShadow: `0 0 6px ${colors.primaryGlow}`, animation: "pulse 2s ease-in-out infinite" }}
                   />
                 )}
               </>
@@ -239,17 +241,18 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Footer */}
       <div
         className="px-5 py-2.5 flex items-center justify-between"
-        style={{ borderTop: "1px solid rgba(0, 196, 188,0.08)" }}
+        style={{ borderTop: `1px solid ${colors.primaryBorder}` }}
       >
-        <span className="text-[8px] uppercase tracking-[0.2em] text-neutral-700">
+        <span className="text-[8px] uppercase tracking-[0.2em]" style={{ color: colors.primaryTextDim }}>
           BUILD 2025.04
         </span>
         <div className="flex gap-1">
           {[0, 1, 2].map(i => (
             <div
               key={i}
-              className="h-1 w-1 rounded-full bg-emerald-900"
+              className="h-1 w-1 rounded-full"
               style={{
+                background: colors.primaryBorder,
                 animation: `pulse ${1.2 + i * 0.3}s ease-in-out infinite`,
                 animationDelay: `${i * 0.2}s`,
               }}

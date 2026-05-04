@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react"
 import { api, type Domain } from "@/lib/api"
 import { ScanlineOverlay } from "@/components/hud"
 import { useNavigate } from "react-router-dom"
+import { useTheme } from "@/context/ThemeContext"
 
 const DOMAIN_COLORS: Record<string, string> = {
   health:      "#00ff88",
@@ -272,6 +273,7 @@ export function DomainsPage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch]     = useState("")
   const navigate = useNavigate()
+  const { colors } = useTheme()
 
   useEffect(() => {
     api.domains()
@@ -313,15 +315,15 @@ export function DomainsPage() {
       <div className="relative z-10 flex flex-col h-full min-h-0">
 
         {/* ── Top header + stats ── */}
-        <div className="px-6 py-5 shrink-0" style={{ borderBottom: "1px solid rgba(0,255,136,0.1)" }}>
+        <div className="px-6 py-5 shrink-0" style={{ borderBottom: `1px solid ${colors.primaryBorder}` }}>
           <div className="flex items-start justify-between gap-6 mb-5">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <div className="h-px w-6 bg-emerald-400/40" />
-                <span className="text-[8px] uppercase tracking-[0.3em] text-emerald-600/60">Knowledge Domains</span>
+                <div className="h-px w-6" style={{ background: colors.primaryBorder }} />
+                <span className="text-[8px] uppercase tracking-[0.3em]" style={{ color: colors.primaryTextDim }}>Knowledge Domains</span>
               </div>
-              <h1 className="text-[20px] font-bold tracking-wide text-emerald-300"
-                style={{ textShadow: "0 0 16px rgba(0,255,136,0.4)" }}>
+              <h1 className="text-[20px] font-bold tracking-wide"
+                style={{ color: colors.primaryText, textShadow: `0 0 16px ${colors.primaryGlow}` }}>
                 Knowledge Domains
               </h1>
               <p className="text-[10px] text-neutral-600 mt-0.5 uppercase tracking-wider">
