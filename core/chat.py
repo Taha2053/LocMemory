@@ -80,7 +80,7 @@ TAGLINE = "local memory · private · yours"
 # CONSTANTS
 # ─────────────────────────────────────────────
 
-TOKEN_BUDGET = 1200   # max tokens for packed memory context
+TOKEN_BUDGET = 1500   # max tokens for packed memory context
 
 
 # ─────────────────────────────────────────────

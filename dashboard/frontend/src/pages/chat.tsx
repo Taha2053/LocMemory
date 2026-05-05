@@ -174,12 +174,12 @@ export function ChatPage() {
     ])
 
     let streamedContent = ""
-    let metadata = { retrieval_ms: 0, memories_used: 0 }
+    let _metadata = { retrieval_ms: 0, memories_used: 0 }
 
     try {
       for await (const event of api.chatStream(msg, history)) {
         if (event.type === "metadata") {
-          metadata = { retrieval_ms: event.retrieval_ms, memories_used: event.memories_used }
+          _metadata = { retrieval_ms: event.retrieval_ms, memories_used: event.memories_used }
         } else if (event.type === "token") {
           streamedContent += event.content
           // Update the last turn with streamed content

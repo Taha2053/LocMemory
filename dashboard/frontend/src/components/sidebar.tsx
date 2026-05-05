@@ -150,7 +150,6 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 style={{
                   background: t.color,
                   boxShadow: theme === t.id ? `0 0 8px ${t.color}` : `0 0 4px ${t.color}50`,
-                  ringColor: t.color,
                 }}
                 title={t.label}
               />

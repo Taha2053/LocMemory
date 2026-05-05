@@ -143,6 +143,19 @@ class MemoryExtractor:
         if not facts:
             return []
 
+        # Check if encryption is enabled
+        from core.settings.config import get_config
+        security_config = get_config().security()
+        encryption_enabled = security_config.get("encryption_enabled", True)
+
+        # Import encryptor only if needed
+        process_before_store = None
+        if encryption_enabled:
+            try:
+                from core.security.security import process_before_store
+            except ImportError:
+                encryption_enabled = False
+
         stored = []
         for fact_data in facts:
             fact_text = fact_data["fact"]
@@ -156,9 +169,14 @@ class MemoryExtractor:
             else:
                 subdomain, _ = self.classifier.detect_subdomain(fact_text, domain)
 
+            # Encrypt if PII detected and encryption enabled
+            text_to_store = fact_text
+            if encryption_enabled and process_before_store:
+                text_to_store, was_encrypted = process_before_store(fact_text)
+
             try:
                 node_id = self.graph_manager.add_node(
-                    text=fact_text,
+                    text=text_to_store,
                     tier=TIER_LEAF,
                     domain=domain,
                     subdomain=subdomain,

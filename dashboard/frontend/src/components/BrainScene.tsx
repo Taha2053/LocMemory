@@ -70,7 +70,7 @@ const DEFAULT_CAM_Z = 1.9
 const DEFAULT_CAM_Z_MOBILE = 2.9
 
 // Pull a surface vertex inward toward centroid by INWARD_PULL fraction.
-function pullInside(pos: Vector3, center: Vector3): Vector3 {
+function _pullInside(pos: Vector3, center: Vector3): Vector3 {
   return pos.clone().lerp(center, INWARD_PULL)
 }
 
