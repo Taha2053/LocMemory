@@ -97,16 +97,17 @@ class CommandHandler:
         table.add_column("description")
 
         rows = [
-            ("help",              "show this help"),
-            ("activate",          "enable background memory extraction"),
-            ("deactivate",        "pause background memory extraction"),
-            ("run",               "alias for /activate"),
-            ("stop",              "alias for /deactivate"),
-            ("mem",               "show memory statistics"),
-            ("stats",             "show graph statistics (tiers + domains)"),
-            ("list [category]",   "list memories, optionally filtered by domain"),
-            ("clear",             "clear the screen"),
-            ("exit | quit",       "leave the chat"),
+            ("/help",              "show this help"),
+            ("/dashboard",         "start backend + frontend and open browser"),
+            ("/activate",          "enable background memory extraction"),
+            ("/deactivate",        "pause background memory extraction"),
+            ("/run",               "alias for /activate"),
+            ("/stop",              "alias for /deactivate"),
+            ("/mem",               "show memory statistics"),
+            ("/stats",             "show graph statistics (tiers + domains)"),
+            ("/list [category]",   "list memories, optionally filtered by domain"),
+            ("/clear",             "clear the screen"),
+            ("/exit | /quit",       "leave the chat"),
         ]
         for cmd, desc in rows:
             table.add_row(cmd, desc)
@@ -148,9 +149,56 @@ class CommandHandler:
         return CommandResult(handled=True)
 
     def _cmd_dashboard(self, _: str) -> CommandResult:
-        self.console.print("[bold yellow]Dashboard not yet implemented.[/]")
-        self.console.print("[dim]Coming soon...[/]")
-        return CommandResult(handled=True)
+        import subprocess
+        import time
+        import webbrowser
+        import os
+        
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        self.console.print("[bold cyan]Starting Dashboard...[/]")
+        
+        # Start backend
+        backend_dir = os.path.join(PROJECT_ROOT, "dashboard", "backend")
+        backend_env = os.environ.copy()
+        backend_env["HF_HUB_OFFLINE"] = "1"
+        
+        self.console.print("[dim]Starting backend server...[/]")
+        backend_proc = subprocess.Popen(
+            ["uvicorn", "main:app", "--reload", "--port", "8000"],
+            cwd=backend_dir,
+            env=backend_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        
+        # Start frontend
+        frontend_dir = os.path.join(PROJECT_ROOT, "dashboard", "frontend")
+        self.console.print("[dim]Starting frontend dev server...[/]")
+        frontend_proc = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=frontend_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        
+        # Wait for servers to start
+        self.console.print("[dim]Waiting for servers to initialize...[/]")
+        time.sleep(5)
+        
+        # Open browser
+        self.console.print("[bold green]Dashboard is ready![/]")
+        self.console.print("[dim]Opening http://localhost:5173 ...[/]")
+        webbrowser.open("http://localhost:5173")
+        
+        self.console.print("")
+        self.console.print("[bold cyan]Dashboard running:[/]")
+        self.console.print("  • Backend: http://localhost:8000")
+        self.console.print("  • Frontend: http://localhost:5173")
+        self.console.print("")
+        self.console.print("[dim]Press Ctrl+C here to stop the dashboard[/]")
+        
+        return CommandResult(handled=True, skip_pipeline=True)
 
     def _cmd_clear(self, _: str) -> CommandResult:
         os.system("cls" if os.name == "nt" else "clear")

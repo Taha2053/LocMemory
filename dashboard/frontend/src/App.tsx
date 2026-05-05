@@ -16,12 +16,9 @@ import { MatrixIntro } from "@/components/MatrixIntro"
 import { ThemeProvider } from "@/context/ThemeContext"
 
 export default function App() {
-  const [introComplete, setIntroComplete] = useState(
-    () => localStorage.getItem("locmemory_intro_seen") === "1"
-  )
+  const [introComplete, setIntroComplete] = useState(false)
 
   const handleIntroComplete = () => {
-    localStorage.setItem("locmemory_intro_seen", "1")
     setIntroComplete(true)
   }
 
@@ -42,7 +39,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
-              <Route index element={<Navigate to="/memories" replace />} />
+              <Route index element={<Navigate to="/graph" replace />} />
               <Route path="/graph" element={<GraphPage />} />
               <Route path="/memories" element={<MemoriesPage />} />
               <Route path="/domains" element={<DomainsPage />} />

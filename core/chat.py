@@ -27,18 +27,18 @@ from core.tui import CommandHandler
 
 
 # ─────────────────────────────────────────────
-# ANSI colors — no external dependencies
+# ANSI colors — blue/green theme inspired by dashboard
 # ─────────────────────────────────────────────
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
-CYAN   = "\033[96m"
-YELLOW = "\033[93m"
+BLUE   = "\033[38;2;0;204;106m"   # #00CC6A (green - vert)
+GREEN  = "\033[38;2;0;196;188m"  # #00C4BC (cyan-green)
+WHITE  = "\033[38;2;217;208;194m" # #d9d0c2 (cream)
+CYAN   = "\033[38;2;0;180;200m"   # cyan-blue
+YELLOW = "\033[38;2;255;200;50m"   # warm yellow
 DIM    = "\033[2m"
-GREEN  = "\033[92m"
-RED    = "\033[91m"
-BLUE   = "\033[38;2;68;157;235m"   # #449DEB
-GOLD   = "\033[38;2;235;174;68m"   # #EBAE44
+RED    = "\033[38;2;220;50;50m"  # soft red
 
 
 # ─────────────────────────────────────────────
@@ -92,12 +92,12 @@ def clear_screen():
 
 
 def print_logo():
-    # Render "Loc" (blue) and "Memory" (gold) side by side, line for line.
+    # Render "Loc" (cyan-green) and "Memory" (cream)
     print()
     for i in range(max(len(LOGO_LOC), len(LOGO_MEMORY))):
         left  = LOGO_LOC[i]    if i < len(LOGO_LOC)    else " " * len(LOGO_LOC[0])
         right = LOGO_MEMORY[i] if i < len(LOGO_MEMORY) else ""
-        print(BOLD + BLUE + left + RESET + BOLD + GOLD + right + RESET)
+        print(BOLD + GREEN + left + RESET + BOLD + WHITE + right + RESET)
     print(DIM + f"  {TAGLINE}" + RESET)
     print()
 
@@ -148,15 +148,13 @@ def run_pipeline(
       5. Queue background: fact extraction + Hebbian update + consolidation check
     """
     candidates = []
-    retrieval_reason = "default"
     retrieved_node_ids = []
 
     if use_necessity_heuristic:
         heuristic = RetrievalNecessityHeuristic()
-        requires_retrieval, retrieval_reason = heuristic.should_retrieve(user_input)
+        requires_retrieval, _ = heuristic.should_retrieve(user_input)
         
         if not requires_retrieval:
-            print(DIM + f"  [heuristic] skipped retrieval: {retrieval_reason}" + RESET)
             candidates = []
         else:
             candidates = retriever.retrieve(user_input)
@@ -166,8 +164,6 @@ def run_pipeline(
         retrieved_node_ids = [c.get("node_id") for c in candidates if c.get("node_id")]
 
     if rl_agent is not None and retrieved_node_ids:
-        print(DIM + "  [rl] using RL agent for selection" + RESET)
-        from dataclasses import dataclass
         from core.rl.agent import RetrievalResult as RLRetrievalResult
         import numpy as np
         
@@ -191,9 +187,8 @@ def run_pipeline(
             selected = rl_agent.select(rl_result, query_emb, token_budget)
             
             candidates = selected if selected else candidates
-            print(DIM + f"  [rl] selected {len(candidates)} candidates" + RESET)
-        except Exception as e:
-            print(DIM + f"  [rl] selection failed, using default: {e}" + RESET)
+        except Exception:
+            pass
 
     state["retrieval_count"] = state.get("retrieval_count", 0) + 1
 
@@ -211,15 +206,14 @@ def run_pipeline(
         exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
         try:
             extractor.start_background_extraction(exchange)
-        except Exception as e:
-            print(DIM + f"  [warn] background extraction failed: {e}" + RESET)
+        except Exception:
+            pass
 
         if retrieved_node_ids and len(retrieved_node_ids) >= 2:
             try:
                 hebbian.update_after_retrieval(retrieved_node_ids)
-                print(DIM + f"  [hebbian] updated {len(retrieved_node_ids)} nodes" + RESET)
-            except Exception as e:
-                print(DIM + f"  [hebbian] update failed: {e}" + RESET)
+            except Exception:
+                pass
 
         consolidation_config = get_config().get_section("consolidation")
         if consolidation_config.get("enabled", True):
@@ -228,19 +222,17 @@ def run_pipeline(
             if consolidator.should_run(state["addition_count"], run_every_n):
                 try:
                     consolidator.run()
-                    print(DIM + f"  [consolidator] ran at addition #{state['addition_count']}" + RESET)
-                except Exception as e:
-                    print(DIM + f"  [consolidator] failed: {e}" + RESET)
+                except Exception:
+                    pass
 
         hebbian_config = get_config().get_section("hebbian")
         if hebbian_config.get("enabled", True):
             decay_interval = hebbian_config.get("decay_interval_retrievals", 100)
             if state.get("retrieval_count", 0) % decay_interval == 0 and state.get("retrieval_count", 0) > 0:
                 try:
-                    decayed = hebbian.apply_decay()
-                    print(DIM + f"  [hebbian] decay applied to {decayed} edges" + RESET)
-                except Exception as e:
-                    print(DIM + f"  [hebbian] decay failed: {e}" + RESET)
+                    hebbian.apply_decay()
+                except Exception:
+                    pass
 
     return response.text
 
@@ -296,11 +288,7 @@ def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, HebbianUpd
             rl_agent = RLAgent()
             if not rl_agent.is_available():
                 rl_agent = None
-                print(DIM + "  [rl] model not available, using default selection" + RESET)
-            else:
-                print(DIM + "  [rl] RL agent loaded successfully" + RESET)
-        except Exception as e:
-            print(DIM + f"  [rl] failed to load: {e}" + RESET)
+        except Exception:
             rl_agent = None
     
     state = {
@@ -318,19 +306,11 @@ def startup() -> tuple[GraphManager, GraphRetriever, MemoryExtractor, HebbianUpd
 def main():
     clear_screen()
     print_logo()
-
-    print(DIM + "  initializing..." + RESET)
     gm, retriever, extractor, hebbian, consolidator, rl_agent, model, state = startup()
 
     def render_banner():
         print_logo()
         print_startup_info(model=model, memory_count=gm.graph.number_of_nodes())
-        active_components = []
-        if rl_agent and rl_agent.is_available():
-            active_components.append("RL")
-        active_components.append("Hebbian")
-        active_components.append("Consolidation")
-        print(DIM + f"  components: {', '.join(active_components)}" + RESET)
 
     clear_screen()
     render_banner()

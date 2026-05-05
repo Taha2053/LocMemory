@@ -54,24 +54,6 @@ def pack_context(
         else:
             tokens_skipped += memory_tokens
 
-    efficiency = (tokens_used / token_budget * 100) if token_budget > 0 else 0
-    skipped_count = len(candidates) - len(selected)
-
-    print(f"\n[pack_context] Results:")
-    print(f"  • Packed  : {len(selected)}/{len(candidates)} memories")
-    print(f"  • Skipped : {skipped_count} memories "
-          f"({tokens_skipped} tokens would have exceeded budget)")
-    print(f"  • Budget  : {tokens_used}/{token_budget} tokens used "
-          f"({efficiency:.1f}% efficiency)")
-
-    print(f"\n  Packed memories (best → least relevant):")
-    for i, mem in enumerate(selected, 1):
-        tok = count_tokens(mem["text"])
-        tier_name = TIER_NAMES.get(mem.get("tier", 3), "leaf")
-        domain = mem.get("domain", "") or "—"
-        print(f"    {i}. [{tier_name}/{domain}] score={mem['score']:.3f} "
-              f"tokens={tok} → \"{mem['text'][:50]}...\"")
-
     return selected
 
 
