@@ -189,7 +189,6 @@ class GraphManager:
             created_at=timestamp,
         )
 
-        print(f"Added node: {node_id[:8]}... [{TIER_NAMES.get(tier, tier)}] {text[:50]}")
         return node_id
 
     def add_edge(
@@ -376,7 +375,6 @@ class GraphManager:
             raise RuntimeError("Database not initialized.")
 
         self.conn.commit()
-        print("Graph saved to database.")
 
     def close(self):
         """Close database connection."""

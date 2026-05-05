@@ -21,7 +21,7 @@ OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "mistral:7b-instruct"
 
 
-FACT_EXTRACTION_PROMPT = """Extract factual memories from this message.
+FACT_EXTRACTION_PROMPT = """Extract specific, non-obvious factual memories from this message.
 Return ONLY valid JSON array of objects with 'fact' and 'domain' keys.
 
 Example format:
@@ -31,12 +31,16 @@ Example format:
 ]
 
 Rules:
+- Only extract SPECIFIC facts that would be genuinely useful to remember
+- Reject: vague statements like "interactions have focused on topics"
+- Reject: generic observations that don't tell you anything new
+- Reject: facts already obvious from context or previous messages
 - Only extract STABLE facts (things that persist over time)
 - Ignore temporary statements like "I'm hungry now" or "weather is nice today"
-- Return 0-5 facts maximum
-- Use lowercase for domain names: health, programming, work, personal, finance, learning, engineering
-- If no stable facts found, return an empty array: []
-- Return ONLY the JSON array, nothing else before or after."""
+- Return 0-3 facts maximum (prefer fewer, higher quality)
+- Use lowercase for domain: health, programming, work, personal, finance, learning, engineering, general
+- If no useful specific facts found, return an empty array: []
+- Return ONLY the JSON array, nothing else."""
 
 
 class MemoryExtractor:
@@ -163,10 +167,8 @@ class MemoryExtractor:
                     embedding=None,
                 )
                 node_ids.append(node_id)
-                tag = f"{domain}/{subdomain}" if subdomain else domain
-                print(f"  + Stored: {fact_text[:50]}... [{tag}]")
             except Exception as e:
-                print(f"Failed to store fact: {e}")
+                pass
 
         return node_ids
 
