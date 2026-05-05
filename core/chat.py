@@ -80,7 +80,7 @@ TAGLINE = "local memory · private · yours"
 # CONSTANTS
 # ─────────────────────────────────────────────
 
-TOKEN_BUDGET = 500   # max tokens for packed memory context
+TOKEN_BUDGET = 1200   # max tokens for packed memory context
 
 
 # ─────────────────────────────────────────────
@@ -194,6 +194,12 @@ def run_pipeline(
 
     # Step 2 — greedy pack
     packed = pack_context(candidates, token_budget=TOKEN_BUDGET)
+    
+    # Debug: show what was retrieved
+    if candidates:
+        print(f"[Recall] {len(candidates)} memories found")
+        for c in candidates[:3]:
+            print(f"  - {c.get('text', '')[:50]}")
 
     # Step 3 — build prompt
     prompt = build_prompt(query=user_input, packed_memories=packed)
@@ -201,11 +207,16 @@ def run_pipeline(
     # Step 4 — call Ollama
     response = call_llm(prompt=prompt, model=model)
 
-    # Step 5 — background tasks (non-blocking)
+    # Step 5 — extract facts and update hebbian
     if extraction_enabled:
         exchange = f"User: {user_input}\nAssistant: {response.text.strip()}"
+        
+        # Run extraction synchronously to show summary
         try:
-            extractor.start_background_extraction(exchange)
+            stored = extractor.process_message(exchange)
+            if stored:
+                domains = ", ".join(set(s["domain"] for s in stored))
+                print(f"[Saved {len(stored)} memory: {domains}]")
         except Exception:
             pass
 

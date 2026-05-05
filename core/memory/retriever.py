@@ -64,12 +64,12 @@ class GraphRetriever:
         max_candidates: int = 20,
         traversal_depth: int = 2,
         cross_domain_threshold: float = 0.5,
-        semantic_weight: float = 0.6,
-        graph_weight: float = 0.4,
+        semantic_weight: float = 0.75,
+        graph_weight: float = 0.25,
         cosine_weight: float = 0.6,
         recency_weight: float = 0.2,
         category_weight: float = 0.2,
-        min_semantic_score: float = 0.15,
+        min_semantic_score: float = 0.08,
     ):
         self.graph_manager = graph_manager
         _config = get_config()
@@ -132,7 +132,7 @@ class GraphRetriever:
 
         elapsed_ms = (time.time() - start_time) * 1000
         if elapsed_ms > 80:
-            print(f"Warning: Retrieval took {elapsed_ms:.1f}ms (target: <80ms)")
+            print(f"retrieval took : {elapsed_ms:.0f}ms")
 
         return [
             {

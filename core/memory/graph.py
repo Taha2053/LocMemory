@@ -162,7 +162,6 @@ class GraphManager:
                 and data.get("domain", "") == domain
                 and str(data.get("text", "")).strip().lower() == normalized
             ):
-                print(f"Skipped duplicate node: {existing_id[:8]}... {text[:50]}")
                 return existing_id
 
         node_id = str(uuid.uuid4())

@@ -21,23 +21,21 @@ OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "mistral:7b-instruct"
 
 
-FACT_EXTRACTION_PROMPT = """Extract specific, non-obvious factual memories from this message.
+FACT_EXTRACTION_PROMPT = """Extract specific, useful factual memories from this message.
 Return ONLY valid JSON array of objects with 'fact' and 'domain' keys.
 
 Example format:
 [
   {"fact": "User started learning Rust", "domain": "programming"},
-  {"fact": "User dislikes C++ memory bugs", "domain": "programming"}
+  {"fact": "User is 25 years old", "domain": "personal"}
 ]
 
 Rules:
 - Only extract SPECIFIC facts that would be genuinely useful to remember
+- DO NOT extract meta-statements like "user asked about X" or "user said they wanted to know Y"
 - Reject: vague statements like "interactions have focused on topics"
-- Reject: generic observations that don't tell you anything new
-- Reject: facts already obvious from context or previous messages
 - Only extract STABLE facts (things that persist over time)
-- Ignore temporary statements like "I'm hungry now" or "weather is nice today"
-- Return 0-3 facts maximum (prefer fewer, higher quality)
+- Return 0-2 facts maximum
 - Use lowercase for domain: health, programming, work, personal, finance, learning, engineering, general
 - If no useful specific facts found, return an empty array: []
 - Return ONLY the JSON array, nothing else."""
@@ -134,18 +132,18 @@ class MemoryExtractor:
 
         return []
 
-    def process_message(self, text: str) -> list[str]:
+    def process_message(self, text: str) -> list[dict]:
         """
         Extract facts, classify them, and store in graph as tier 3 nodes.
 
-        Returns list of created node IDs.
+        Returns list of dicts with 'node_id', 'fact', 'domain'.
         """
         facts = self.extract_facts(text)
 
         if not facts:
             return []
 
-        node_ids = []
+        stored = []
         for fact_data in facts:
             fact_text = fact_data["fact"]
             domain = fact_data.get("domain")
@@ -166,11 +164,11 @@ class MemoryExtractor:
                     subdomain=subdomain,
                     embedding=None,
                 )
-                node_ids.append(node_id)
-            except Exception as e:
+                stored.append({"node_id": node_id, "fact": fact_text, "domain": domain})
+            except Exception:
                 pass
 
-        return node_ids
+        return stored
 
     def start_background_extraction(self, text: str):
         """
@@ -182,7 +180,6 @@ class MemoryExtractor:
             self._start_worker()
 
         self._task_queue.put(text)
-        print(f"[Background] Queued extraction task for: {text[:50]}...")
 
     def _start_worker(self):
         """Start the background worker thread."""
@@ -193,7 +190,6 @@ class MemoryExtractor:
             name="MemoryExtractor",
         )
         self._worker_thread.start()
-        print("[Background] Extractor worker started")
 
     def _worker_loop(self):
         """Background worker that processes extraction tasks."""
@@ -205,10 +201,8 @@ class MemoryExtractor:
 
                 try:
                     node_ids = self.process_message(text)
-                    if node_ids:
-                        print(f"[Background] Extracted {len(node_ids)} facts")
-                except Exception as e:
-                    print(f"[Background] Extraction error: {e}")
+                except Exception:
+                    pass
 
                 self._task_queue.task_done()
 
@@ -224,9 +218,6 @@ class MemoryExtractor:
             return
 
         pending = self._task_queue.qsize()
-        if pending:
-            print(f"[Background] Draining {pending} pending extraction(s) "
-                  f"(up to {drain_timeout:.0f}s)...")
 
         try:
             deadline = time.time() + drain_timeout
@@ -239,7 +230,6 @@ class MemoryExtractor:
         self._task_queue.put(None)
         if self._worker_thread:
             self._worker_thread.join(timeout=drain_timeout)
-        print("[Background] Extractor worker stopped")
 
     def __enter__(self):
         return self

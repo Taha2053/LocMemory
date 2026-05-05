@@ -335,13 +335,7 @@ def call_llm(
             "Supported: ollama | huggingface | anthropic"
         )
 
-    print(f"\n[llm.py] Response received")
-    print(f"  Provider      : {provider}")
-    print(f"  Model         : {resp.model}")
-    print(f"  Input tokens  : {resp.input_tokens}")
-    print(f"  Output tokens : {resp.output_tokens}")
-    print(f"  Total tokens  : {resp.total_tokens}")
-    print(f"  Response length: {len(resp.text)} chars")
+    print(f"[LLM] {resp.input_tokens}+{resp.output_tokens} tokens ({len(resp.text)} chars)")
 
     return resp
 
