@@ -24,16 +24,6 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <style>{`
-        :root {
-          --theme-primary: #00c4bc;
-          --theme-primary-dim: rgba(0, 196, 188, 0.3);
-          --theme-primary-glow: rgba(0, 196, 188, 0.6);
-          --theme-primary-border: rgba(0, 196, 188, 0.2);
-          --theme-primary-text: #00c4bc;
-          --theme-primary-text-dim: rgba(0, 196, 188, 0.6);
-        }
-      `}</style>
       {!introComplete && <MatrixIntro onComplete={handleIntroComplete} />}
       {introComplete && (
         <BrowserRouter>

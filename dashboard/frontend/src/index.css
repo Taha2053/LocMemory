@@ -36,6 +36,15 @@
 
 @layer base {
   :root {
+    /* Theme CSS Variables - used by all components */
+    --theme-primary: #00c4bc;
+    --theme-primary-dim: rgba(0, 196, 188, 0.3);
+    --theme-primary-glow: rgba(0, 196, 188, 0.6);
+    --theme-primary-border: rgba(0, 196, 188, 0.2);
+    --theme-primary-text: #00c4bc;
+    --theme-primary-text-dim: rgba(0, 196, 188, 0.6);
+    --theme-primary-hover: rgba(0, 196, 188, 0.15);
+    
     --background: 0 0% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -53,6 +62,55 @@
     --ring: 160 80% 40%;
     --radius: 0.5rem;
   }
+
+  /* Theme-aware color overrides for common Tailwind classes */
+  .text-emerald-400 { color: var(--theme-primary) !important; }
+  .text-emerald-300 { color: var(--theme-primary-text) !important; }
+  .text-emerald-200 { color: var(--theme-primary-text) !important; }
+  .text-emerald-500 { color: var(--theme-primary-text-dim) !important; }
+  .text-emerald-600 { color: var(--theme-primary-text-dim) !important; }
+  .text-emerald-700 { color: var(--theme-primary-text-dim) !important; }
+  .text-emerald-100 { color: var(--theme-primary-text) !important; }
+  .text-emerald-50 { color: var(--theme-primary-text-dim) !important; }
+  
+  .bg-emerald-400 { background-color: var(--theme-primary) !important; }
+  .bg-emerald-500 { background-color: var(--theme-primary-dim) !important; }
+  .bg-emerald-600 { background-color: var(--theme-primary-dim) !important; }
+  
+  .border-emerald-400 { border-color: var(--theme-primary) !important; }
+  .border-emerald-500 { border-color: var(--theme-primary-border) !important; }
+  .border-emerald-300 { border-color: var(--theme-primary-border) !important; }
+  
+  .ring-emerald-400 { --tw-ring-color: var(--theme-primary) !important; }
+  .ring-emerald-500 { --tw-ring-color: var(--theme-primary-border) !important; }
+  
+  .hover\:text-emerald-400:hover { color: var(--theme-primary) !important; }
+  .hover\:border-emerald-400:hover { border-color: var(--theme-primary) !important; }
+  .hover\:bg-emerald-400\/10:hover { background-color: var(--theme-primary-hover) !important; }
+  .group:hover .group-hover\:text-emerald-400 { color: var(--theme-primary) !important; }
+  
+  /* Green alias */
+  .text-green-400 { color: var(--theme-primary) !important; }
+  .text-green-300 { color: var(--theme-primary-text) !important; }
+  .text-green-500 { color: var(--theme-primary-text-dim) !important; }
+  .bg-green-400 { background-color: var(--theme-primary) !important; }
+  .border-green-400 { border-color: var(--theme-primary) !important; }
+  
+  /* Purple for patterns */
+  .text-purple-400 { color: #a855f7 !important; }
+  .text-purple-300 { color: #c084fc !important; }
+  .text-purple-500 { color: #a855f7 !important; }
+  .border-purple-400 { border-color: #a855f7 !important; }
+  .border-purple-500 { border-color: #9333ea !important; }
+  .bg-purple-400 { background-color: #a855f7 !important; }
+  .hover\:text-purple-400:hover { color: #a855f7 !important; }
+  .hover\:border-purple-400:hover { border-color: #a855f7 !important; }
+  
+  /* Neutral variants that work well in dark theme */
+  .text-neutral-400 { color: #a3a3a3 !important; }
+  .text-neutral-500 { color: #737373 !important; }
+  .text-neutral-600 { color: #525252 !important; }
+  .text-neutral-700 { color: #404040 !important; }
 
   .dark {
     --background: 180 100% 3%;
@@ -419,5 +477,5 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #00cc66;
+  background: var(--theme-primary);
 }

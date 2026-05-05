@@ -73,8 +73,11 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       />
 
       {/* Corner brackets */}
-      <div className="pointer-events-none absolute top-2 left-2 h-5 w-5 border-t border-l border-emerald-400/50"
-        style={{ filter: "drop-shadow(0 0 3px rgba(0, 196, 188,0.5))" }} />
+      <div className="pointer-events-none absolute top-2 left-2 h-5 w-5 border-t border-l"
+        style={{ 
+          borderColor: colors.primaryBorder, 
+          filter: `drop-shadow(0 0 3px ${colors.primaryGlow})` 
+        }} />
       <div className="pointer-events-none absolute bottom-2 left-2 h-5 w-5 border-b border-l"
         style={{ borderColor: "rgba(255,140,38,0.45)", filter: "drop-shadow(0 0 3px rgba(255,140,38,0.4))" }} />
       <div className="pointer-events-none absolute top-2 right-2 h-5 w-5 border-t border-r"
@@ -115,14 +118,18 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span
-              className="h-1.5 w-1.5 rounded-full bg-green-400"
-              style={{ boxShadow: "0 0 6px rgba(74,222,128,0.9)", animation: "pulse 2s ease-in-out infinite" }}
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ 
+                backgroundColor: colors.primary,
+                boxShadow: `0 0 6px ${colors.primaryGlow}`,
+                animation: "pulse 2s ease-in-out infinite" 
+              }}
             />
-            <span className="text-[8px] uppercase tracking-[0.2em] text-green-400/80">ONLINE</span>
+            <span className="text-[8px] uppercase tracking-[0.2em]" style={{ color: colors.primaryTextDim }}>ONLINE</span>
           </div>
           <span
-            className="text-[9px] tabular-nums text-emerald-700/60"
-            style={{ fontVariantNumeric: "tabular-nums" }}
+            className="text-[9px] tabular-nums"
+            style={{ fontVariantNumeric: "tabular-nums", color: colors.primaryTextDim }}
           >
             {hh}:{mm}:{ss}
           </span>
