@@ -13,6 +13,8 @@ Run with:
 
 import os
 import sys
+import threading
+import time
 
 from rich.console import Console
 
@@ -42,6 +44,41 @@ RED    = "\033[38;2;220;50;50m"  # soft red
 
 
 # ─────────────────────────────────────────────
+
+# ──────────────────────────────────────
+
+_spinner_active = False
+_spinner_thread = None
+
+
+def _spinner_animation():
+    """Background thread that shows a spinning animation."""
+    frames = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    i = 0
+    while _spinner_active:
+        sys.stdout.write(f"\r{YELLOW}  {frames[i % len(frames)]} Thinking...{RESET}")
+        sys.stdout.flush()
+        time.sleep(0.12)
+        i += 1
+    sys.stdout.write(f"\r{' '*30}")  # Clear the line
+
+
+def start_spinner():
+    """Start the spinner animation in a background thread."""
+    global _spinner_active, _spinner_thread
+    _spinner_active = True
+    _spinner_thread = threading.Thread(target=_spinner_animation, daemon=True)
+    _spinner_thread.start()
+
+
+def stop_spinner():
+    """Stop the spinner animation."""
+    global _spinner_active, _spinner_thread
+    _spinner_active = False
+    if _spinner_thread:
+        _spinner_thread.join(timeout=0.5)
+        _spinner_thread = None
+
 # LOGO
 # ─────────────────────────────────────────────
 
@@ -205,7 +242,12 @@ def run_pipeline(
     prompt = build_prompt(query=user_input, packed_memories=packed)
 
     # Step 4 — call Ollama
-    response = call_llm(prompt=prompt, model=model)
+    start_spinner()
+    try:
+        response = call_llm(prompt=prompt, model=model)
+    finally:
+        stop_spinner()
+    print()
 
     # Step 5 — extract facts and update hebbian
     if extraction_enabled:

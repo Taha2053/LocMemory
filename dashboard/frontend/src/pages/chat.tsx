@@ -3,6 +3,7 @@ import { api, ChatMessage, ChatResponse, RetrievedResult } from "@/lib/api"
 import { Send, Brain, Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/context/ThemeContext"
+import { motion, AnimatePresence } from "framer-motion"
 
 const TIER_COLORS: Record<number, string> = {
   1: "rgba(0,196,188,0.8)",
@@ -139,7 +140,8 @@ function UserBubble({ turn }: { turn: Turn }) {
 export function ChatPage() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState("")
-  const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [typing, setTyping] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { colors } = useTheme()
@@ -159,6 +161,7 @@ export function ChatPage() {
     setInput("")
     setTurns(prev => [...prev, { role: "user", content: msg }])
     setLoading(true)
+    setTyping(true)
 
     // Add placeholder for streaming response
     setTurns(prev => [
@@ -224,6 +227,7 @@ export function ChatPage() {
       })
     } finally {
       setLoading(false)
+      setTyping(false)
       textareaRef.current?.focus()
     }
   }
@@ -287,6 +291,40 @@ export function ChatPage() {
 
         <div ref={bottomRef} />
       </div>
+
+      {/* typing indicator */}
+      <AnimatePresence>
+        {typing && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="px-4 py-2 flex items-center gap-1"
+          >
+            <span className="text-[10px] uppercase tracking-widest" style={{ color: colors.primaryTextDim }}>
+              Thinking
+            </span>
+            <motion.span
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              style={{ color: colors.primary }}
+              className="text-sm"
+            >.</motion.span>
+            <motion.span
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
+              style={{ color: colors.primary }}
+              className="text-sm"
+            >.</motion.span>
+            <motion.span
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}
+              style={{ color: colors.primary }}
+              className="text-sm"
+            >.</motion.span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* input bar */}
       <div
